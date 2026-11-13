@@ -30,11 +30,14 @@ struct PendingPlay {
     tries: u8,
 }
 
+/// Host-lifetime video player. Drop only on app shutdown or explicit close.
+/// Prevents mid-play crash caused by freeing player while libvlc decodes.
 pub(crate) struct MediaDesk {
     states: HashMap<String, Load>,
     inflight: RefCell<HashSet<String>>,
     viewer: Option<String>,
-    player: Option<crate::x_panel::player::VideoPlayer>,
+    /// Host-lifetime player — never recreated per video, only reused
+    player: Option<Arc<std::sync::Mutex<crate::x_panel::player::VideoPlayer>>>,
     pending: Option<PendingPlay>,
     needs_focus: bool,
     pub(crate) notice: String,
@@ -60,8 +63,11 @@ impl MediaDesk {
         self.viewer = None;
         self.pending = None;
         self.notice.clear();
-        if let Some(player) = self.player.take() {
-            player.stop();
+        // Stop the media but KEEP the player for host lifetime
+        if let Some(player) = self.player.as_ref() {
+            if let Ok(mut p) = player.lock() {
+                p.stop();
+            }
         }
         open
     }
@@ -69,6 +75,28 @@ impl MediaDesk {
     fn player_open(&self) -> bool {
         self.player.is_some() || self.viewer.is_some() || self.pending.is_some()
     }
+
+    /// Start or reuse the host-lifetime player with direct3d11 vout.
+    fn ensure_player(&mut self, hwnd: isize, scale: f32, rect: (f32, f32, f32, f32), url: &str) -> Result<(), String> {
+        if let Some(player) = self.player.as_ref() {
+            // Reuse existing player — just start new media
+            if let Ok(mut p) = player.lock() {
+                // Stop current then start new
+                p.stop();
+            }
+            // Restart with new URL — VideoPlayer::start creates fresh inner
+            let new_player = crate::x_panel::player::VideoPlayer::start(hwnd, scale, rect, url, 80)
+                .map_err(|e| format!("VideoPlayer restart: {e}"))?;
+            self.player = Some(Arc::new(std::sync::Mutex::new(new_player)));
+            Ok(())
+        } else {
+            let new_player = crate::x_panel::player::VideoPlayer::start(hwnd, scale, rect, url, 80)
+                .map_err(|e| format!("VideoPlayer start: {e}"))?;
+            self.player = Some(Arc::new(std::sync::Mutex::new(new_player)));
+            Ok(())
+        }
+    }
+
 }
 
 impl TrendsDesk {

@@ -331,12 +331,14 @@ impl TrendsDesk {
             return;
         }
         self.model_notice = format!("Search: {term}");
-        self.columns.retain(|column| column.topic.id != "search");
+        let search_id = format!("search:{}", term.replace(' ', "_"));
+        self.columns.retain(|column| column.topic.id != search_id);
         let topic = termy_x::trends_desk::Topic {
-            id: "search".into(),
+            id: search_id.clone(),
             name: format!("Search: {term}"),
             desc: term.clone(),
         };
+        let expected_id = search_id.clone();
         self.columns.insert(
             0,
             crate::trends_desk::ColumnUi {
@@ -346,7 +348,7 @@ impl TrendsDesk {
                 tags: Vec::new(),
             },
         );
-        self.settings.subject_id = "search".into();
+        self.settings.subject_id = search_id;
         let config = self.config.clone();
         cx.spawn(async move |this, cx| {
             let outcome = cx
@@ -362,7 +364,7 @@ impl TrendsDesk {
                 if let Some(column) = desk
                     .columns
                     .iter_mut()
-                    .find(|column| column.topic.id == "search")
+                    .find(|column| column.topic.id == expected_id)
                 {
                     column.view = termy_x::trends_desk::column_from_outcome(&outcome, None);
                 }

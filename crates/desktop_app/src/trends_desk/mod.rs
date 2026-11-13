@@ -9,6 +9,7 @@ use gpui_kit::{
     App, AppContext, Context, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
     ParentElement, Render, StatefulInteractiveElement, Styled, Window, div, px, rgb,
 };
+use super::design::*;
 use termy_x::XConfig;
 use termy_x::io::SystemRunner;
 use termy_x::trends_desk::{
@@ -20,6 +21,8 @@ use termy_x::trends_desk::{
     isolated_opencli_config, open_editor, prepare_draft_file, surface_after_nav,
     synthetic_fixture_posts, termy_xl_data_root, within_termy_x_config,
 };
+
+pub(crate) mod design;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DeskOptions {
@@ -470,7 +473,20 @@ impl TrendsDesk {
                     .map(|report| report.posts.clone())
                     .unwrap_or_default()
             };
-            column.view = column_loading_keep(&query, kept);
+            let source_label = if column.topic.search_source == "treg" { "Treg" } else { "OpenCLI" };
+            let sort_label = if column.topic.sort == "popular" { "Top" } else { "Newest" };
+            let posts_cached = !kept.is_empty();
+            column.view = termy_x::trends_desk::ColumnView {
+                phase: termy_x::trends_desk::Phase::Loading,
+                banner: if posts_cached {
+                    format!("Refreshing \"{query}\" · {source_label} · {sort_label}. Cards below are saved.")
+                } else {
+                    format!("Loading \"{query}\" · {source_label} · {sort_label}.")
+                },
+                posts: kept,
+                posts_cached,
+                query: query.to_string(),
+            };
             topics.push(column.topic.clone());
         }
         cx.notify();
@@ -1384,8 +1400,8 @@ impl Render for TrendsDesk {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(0x070b14))
-            .text_color(rgb(0xe5e5ea));
+            .bg(rgb(BG_DEEP))
+            .text_color(rgb(TX_PRIMARY));
         if width <= DOCK_WIDTH + 8.0 {
             root = root.items_center().justify_center().child(self.xl_mark(cx));
         } else {

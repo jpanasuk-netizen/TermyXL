@@ -473,7 +473,7 @@ pub(crate) fn open_terminal_window_with_placement(
         move |window, cx| {
             #[cfg(target_os = "linux")]
             {
-                window.set_window_title("Termy");
+                window.set_window_title("Termy XL");
             }
             // Before the view exists, so its DWM theming finds the handle.
             #[cfg(target_os = "windows")]

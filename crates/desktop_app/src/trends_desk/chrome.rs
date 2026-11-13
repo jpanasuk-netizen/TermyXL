@@ -6,6 +6,7 @@ use gpui_kit::{
 };
 
 use super::{Field, Surface, TrendsDesk};
+use super::design::*;
 use termy_x::trends_desk::{
     GPU_NOTE, IMAGE_QUOTE_NOTE, Nav, TakeProvider, VISIBLE_NAME, turn_page,
 };
@@ -105,9 +106,9 @@ impl TrendsDesk {
             .gap(px(12.0))
             .px(px(16.0))
             .py(px(12.0))
-            .bg(rgb(0x10141c))
+            .bg(rgb(BG_NAV))
             .border_b_1()
-            .border_color(rgb(0x2c2c2e))
+            .border_color(rgb(BD_DEFAULT))
             .child(self.xl_mark(cx))
             .child(
                 div()
@@ -117,37 +118,37 @@ impl TrendsDesk {
                     .child(
                         div()
                             .text_size(px(22.0))
-                            .text_color(rgb(0x7af6ff))
+                            .text_color(rgb(AC_CYAN))
                             .child(VISIBLE_NAME),
                     )
                     .child(
                         div()
                             .text_size(px(12.0))
-                            .text_color(rgb(0xc7c7cc))
+                            .text_color(rgb(TX_SECONDARY))
                             .child("Trends Desk"),
                     )
                     .child(
                         div()
                             .text_size(px(12.0))
-                            .text_color(rgb(0x8e8e93))
+                            .text_color(rgb(TX_MUTED))
                             .child(self.session.label.clone()),
                     )
                     .child(
                         div()
                             .text_size(px(11.0))
-                            .text_color(rgb(0x8e8e93))
+                            .text_color(rgb(TX_MUTED))
                             .child(self.hud()),
                     )
                     .child(
                         div()
                             .text_size(px(11.0))
-                            .text_color(rgb(0x9ad7ff))
+                            .text_color(rgb(AC_CYAN))
                             .child(self.hermes_pill.clone()),
                     )
                     .children((!self.action_note.is_empty()).then(|| {
                         div()
                             .text_size(px(12.0))
-                            .text_color(rgb(0xffd60a))
+                            .text_color(rgb(AC_GOLD))
                             .whitespace_normal()
                             .child(self.action_note.clone())
                     }))
@@ -157,7 +158,7 @@ impl TrendsDesk {
                         div()
                             .id("desk-model-notice")
                             .text_size(px(11.0))
-                            .text_color(rgb(0xffd60a))
+                            .text_color(rgb(AC_GOLD))
                             .child(notice)
                             .tooltip({
                                 let full = full.clone();
@@ -289,7 +290,22 @@ impl TrendsDesk {
                 cx,
                 Nav::Settings,
             ))
-            .child(self.search_box(cx))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(6.0))
+                    .child(self.search_box(cx))
+                    .child(button(
+                        "desk-search-go",
+                        "Go",
+                        false,
+                        cx.listener(|this, _, _, cx| {
+                            this.run_live_search(cx);
+                            cx.notify();
+                        }),
+                    )),
+            )
             .into_any_element()
     }
 
@@ -401,7 +417,7 @@ impl TrendsDesk {
             let mut card = div()
                 .p(px(10.0))
                 .rounded(px(10.0))
-                .bg(rgb(0x16161e))
+                .bg(rgb(BG_CARD))
                 .flex()
                 .flex_col()
                 .gap(px(4.0))
@@ -519,7 +535,7 @@ impl TrendsDesk {
                     .child(
                         div()
                             .text_size(px(12.0))
-                            .text_color(rgb(0xc7c7cc))
+                            .text_color(rgb(TX_SECONDARY))
                             .whitespace_normal()
                             .child(format!("Original · {tweet}")),
                     )
@@ -528,7 +544,7 @@ impl TrendsDesk {
                         div()
                             .text_size(px(12.0))
                             .whitespace_normal()
-                            .text_color(rgb(0x7af6ff))
+                            .text_color(rgb(AC_CYAN))
                             .child(url.clone()),
                     )
                     .child(
@@ -581,9 +597,9 @@ impl TrendsDesk {
             .mb(px(8.0))
             .p(px(10.0))
             .rounded(px(10.0))
-            .bg(rgb(0x16161e))
+            .bg(rgb(BG_CARD))
             .border_1()
-            .border_color(rgb(0x7af6ff))
+            .border_color(rgb(AC_CYAN))
             .flex()
             .flex_col()
             .gap(px(6.0))
@@ -593,7 +609,7 @@ impl TrendsDesk {
                 div()
                     .whitespace_normal()
                     .text_size(px(12.0))
-                    .text_color(rgb(0x7af6ff))
+                    .text_color(rgb(AC_CYAN))
                     .child(url.clone()),
             )
             .child(
@@ -628,123 +644,20 @@ impl TrendsDesk {
     }
 
     pub(crate) fn settings_view(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let provider = termy_x::trends_desk::provider_label(&self.settings.take_provider);
         div()
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .child({
-                let (base, model) = self.config.ai_endpoint();
-                div()
-                    .text_size(px(12.0))
-                    .whitespace_normal()
-                    .child(format!(
-                        "Takes start at Vyce · glm-5.3-flash. A saved model URL overrides it. Now: {model} @ {base}"
-                    ))
-            })
-            .child(self.field_chip(
-                "desk-ai-base",
-                "Model URL",
-                &self.ai_base_text,
-                Field::AiBase,
-                cx,
-            ))
-            .child(self.field_chip(
-                "desk-ai-model",
-                "Model name",
-                &self.ai_model_text,
-                Field::AiModel,
-                cx,
-            ))
-            .child(self.field_chip(
-                "desk-ai-key",
-                "Model key",
-                &self.ai_key_text,
-                Field::AiKey,
-                cx,
-            ))
-            .child(button(
-                "desk-save-ai",
-                "Save model",
-                false,
-                cx.listener(|this, _, _, cx| this.save_model(cx)),
-            ))
-            .child(div().text_size(px(12.0)).child(self.hermes_pill.clone()))
-            .child(self.field_chip(
-                "desk-hermes-base",
-                "Hermes URL",
-                &self.hermes_base_text,
-                Field::HermesBase,
-                cx,
-            ))
-            .child(self.field_chip(
-                "desk-hermes-model",
-                "Hermes model",
-                &self.hermes_model_text,
-                Field::HermesModel,
-                cx,
-            ))
-            .child(self.field_chip(
-                "desk-hermes-key",
-                "Hermes key",
-                &hermes_key_label(&self.hermes_key_text, self.field == Some(Field::HermesKey)),
-                Field::HermesKey,
-                cx,
-            ))
-            .child(button(
-                "desk-save-hermes",
-                "Save Hermes",
-                false,
-                cx.listener(|this, _, _, cx| this.save_hermes(cx)),
-            ))
-            .child(button(
-                "desk-auto-fallback",
-                if self.settings.auto_fallback {
-                    "Auto-fallback: On"
-                } else {
-                    "Auto-fallback: Off"
-                },
-                self.settings.auto_fallback,
-                cx.listener(|this, _, _, cx| {
-                    this.settings.auto_fallback = !this.settings.auto_fallback;
-                    if this.writable {
-                        let _ = this.store.save_settings(&this.settings);
-                    }
-                    this.action_note = if this.settings.auto_fallback {
-                        "Auto-fallback is on. Grok still does not switch by itself.".into()
-                    } else {
-                        "Auto-fallback is off.".into()
-                    };
-                    cx.notify();
-                }),
-            ))
             .child(
                 div()
-                    .text_size(px(13.0))
-                    .whitespace_normal()
-                    .child("Default take provider"),
+                    .mt(px(10.0))
+                    .mb(px(4.0))
+                    .text_size(px(14.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Model"),
             )
             .child(self.provider_dropdown(cx))
-            .child(self.field_chip(
-                "desk-custom-base",
-                "Custom base URL",
-                &self.settings.custom_base,
-                Field::CustomBase,
-                cx,
-            ))
-            .child(self.field_chip(
-                "desk-custom-model",
-                "Custom model",
-                &self.settings.custom_model,
-                Field::CustomModel,
-                cx,
-            ))
-            .child(self.field_chip(
-                "desk-custom-key-env",
-                "Custom key env name",
-                &self.settings.custom_key_env,
-                Field::CustomKeyEnv,
-                cx,
-            ))
             .child(self.field_chip("desk-focus", "Focus", &self.focus_text, Field::Focus, cx))
             .child(self.field_chip(
                 "desk-daily-at",
@@ -830,21 +743,21 @@ impl TrendsDesk {
             .rounded(px(8.0))
             .border_1()
             .border_color(if editing {
-                rgb(0x0a84ff)
+                rgb(AC_CYAN)
             } else {
-                rgb(0x3a3a3c)
+                rgb(BD_DEFAULT)
             })
             .bg(if editing {
-                rgb(0x1a2a44)
+                rgb(BG_INPUT)
             } else {
-                rgb(0x2c2c2e)
+                rgb(BG_BUTTON)
             })
             .text_size(px(12.0))
             .min_w(px(160.0))
             .min_h(px(36.0))
             .flex_shrink_0()
             .cursor_text()
-            .hover(|style| style.border_color(rgb(0xff4fa3)))
+            .hover(|style| style.border_color(rgb(AC_PINK)))
             .child(termy_x::trends_desk::search_label(
                 editing,
                 &self.filter_text,
@@ -913,8 +826,8 @@ impl TrendsDesk {
             .px(px(16.0))
             .py(px(8.0))
             .text_size(px(11.0))
-            .text_color(rgb(0x8e8e93))
-            .bg(rgb(0x10141c))
+            .text_color(rgb(TX_MUTED))
+            .bg(rgb(BG_NAV))
             .child(format!("{GPU_NOTE} {IMAGE_QUOTE_NOTE}"))
             .into_any_element()
     }
@@ -962,22 +875,22 @@ pub(crate) fn button(
         .py(px(8.0))
         .rounded(px(8.0))
         .border_1()
-        .border_color(if active { rgb(0xff4fa3) } else { rgb(0x3a3a3c) })
-        .bg(if active { rgb(0x2a1020) } else { rgb(0x2c2c2e) })
+        .border_color(if active { rgb(AC_PINK) } else { rgb(BD_DEFAULT) })
+        .bg(if active { rgb(BG_ACTIVE) } else { rgb(BG_BUTTON) })
         .text_size(px(13.0))
-        .text_color(if active { rgb(0x7af6ff) } else { rgb(0xe5e5ea) })
+        .text_color(if active { rgb(AC_CYAN) } else { rgb(TX_PRIMARY) })
         .cursor_pointer()
         .hover(|style| {
             style
-                .bg(rgb(0x3a2430))
-                .border_color(rgb(0xff4fa3))
-                .text_color(rgb(0xffe56a))
+                .bg(rgb(BG_CARD_HOVER))
+                .border_color(rgb(AC_PINK))
+                .text_color(rgb(AC_GOLD))
         })
         .active(|style| {
             style
-                .bg(rgb(0xff4fa3))
-                .border_color(rgb(0xff4fa3))
-                .text_color(rgb(0x070b14))
+                .bg(rgb(AC_PINK))
+                .border_color(rgb(AC_PINK))
+                .text_color(rgb(TX_INVERSE))
         })
         .tooltip(move |_, cx| cx.new(|_| HintView { text: tip.clone() }).into())
         .child(label)
@@ -1036,14 +949,14 @@ fn draft_post_control(
             .child(
                 div()
                     .text_size(px(28.0))
-                    .text_color(rgb(0xffe14a))
+                    .text_color(rgb(AC_GOLD))
                     .child("✓"),
             )
             .child(format!("Posted ✓ {when}"))
             .child(
                 div()
                     .text_size(px(12.0))
-                    .text_color(rgb(0x7af6ff))
+                    .text_color(rgb(AC_CYAN))
                     .whitespace_normal()
                     .child(link),
             )
@@ -1063,7 +976,7 @@ fn draft_post_control(
     if let Some(error) = error {
         column = column.child(
             div()
-                .text_color(rgb(0xff6b6b))
+                .text_color(rgb(AC_ERROR))
                 .whitespace_normal()
                 .child(error),
         );
@@ -1080,9 +993,9 @@ fn draft_post_control(
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(rgb(0x7af6ff))
+                .bg(rgb(AC_CYAN))
                 .text_size(px(16.0))
-                .text_color(rgb(0x070b14))
+                .text_color(rgb(TX_INVERSE))
                 .cursor_pointer()
                 .child(label)
                 .on_mouse_down(
@@ -1119,18 +1032,18 @@ pub(crate) fn page_button(
         .justify_center()
         .rounded(px(8.0))
         .border_1()
-        .border_color(rgb(0x3a3a3c))
-        .bg(rgb(0x2c2c2e))
+        .border_color(rgb(BD_DEFAULT))
+        .bg(rgb(BG_BUTTON))
         .text_size(px(14.0))
-        .text_color(rgb(0xe5e5ea))
+        .text_color(rgb(TX_PRIMARY))
         .cursor_pointer()
         .hover(|style| {
             style
-                .bg(rgb(0x3a2430))
-                .border_color(rgb(0xff4fa3))
-                .text_color(rgb(0xffe56a))
+                .bg(rgb(BG_CARD_HOVER))
+                .border_color(rgb(AC_PINK))
+                .text_color(rgb(AC_GOLD))
         })
-        .active(|style| style.bg(rgb(0xff4fa3)).text_color(rgb(0x070b14)))
+        .active(|style| style.bg(rgb(AC_PINK)).text_color(rgb(TX_INVERSE)))
         .tooltip(move |_, cx| cx.new(|_| HintView { text: tip.clone() }).into())
         .child(label)
         .on_mouse_down(MouseButton::Left, handler)
@@ -1147,9 +1060,9 @@ impl Render for HintView {
             .max_w(px(360.0))
             .p(px(8.0))
             .rounded(px(8.0))
-            .bg(rgb(0x1c1c1e))
+            .bg(rgb(BG_CARD))
             .text_size(px(12.0))
-            .text_color(rgb(0xe5e5ea))
+            .text_color(rgb(TX_PRIMARY))
             .child(self.text.clone())
     }
 }

@@ -350,7 +350,14 @@ pub struct Topic {
     pub id: String,
     pub name: String,
     pub desc: String,
+    #[serde(default = "default_search_source")]
+    pub search_source: String,
+    #[serde(default = "default_sort")]
+    pub sort: String,
 }
+
+fn default_search_source() -> String { "opencli".into() }
+fn default_sort() -> String { "newest".into() }
 
 impl Topic {
     pub fn law() -> Self {
@@ -360,6 +367,8 @@ impl Topic {
             desc:
                 "legal news, court rulings, Supreme Court, lawsuits, legal commentary, regulation"
                     .into(),
+            search_source: default_search_source(),
+            sort: default_sort(),
         }
     }
 
@@ -368,6 +377,8 @@ impl Topic {
             id: "finance".into(),
             name: "Finance".into(),
             desc: "markets, stocks, the Fed, interest rates, crypto, earnings, economy".into(),
+            search_source: default_search_source(),
+            sort: default_sort(),
         }
     }
 
@@ -376,6 +387,8 @@ impl Topic {
             id: "ai".into(),
             name: "AI".into(),
             desc: "AI news and discussion".into(),
+            search_source: default_search_source(),
+            sort: default_sort(),
         }
     }
 }

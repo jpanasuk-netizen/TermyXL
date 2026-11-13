@@ -225,8 +225,6 @@ impl TrendsDesk {
             ("receipts".into(), "Receipts".into()),
             ("heat".into(), "Sort by heat".into()),
             ("termy".into(), "Termy areas".into()),
-            ("free".into(), "Provider Free".into()),
-            ("treg".into(), "Provider Treg".into()),
         ];
         for column in &self.columns {
             rows.push((
@@ -281,10 +279,6 @@ impl TrendsDesk {
                     self.pack.sort_heat = !self.pack.sort_heat;
                     self.save_pack_file();
                 }
-                "free" => self.remember_provider("free"),
-                "treg" => self.remember_provider("treg"),
-                "hermes" => self.remember_provider("hermes"),
-                "grok" => self.remember_provider("grok"),
                 _ => {}
             }
         }

@@ -461,9 +461,14 @@ impl TrendsDesk {
                 .map(|post| post.id.clone())
                 .collect::<Vec<_>>(),
         );
+        let source_icon = if column.topic.search_source == "treg" { "Treg" } else { "OpenCLI" };
+        let sort_icon = if column.topic.sort == "popular" { "Top" } else { "Newest" };
         let label = format!(
-            "{} · {fresh} new",
-            page_label(index, self.columns.len(), &column.topic.name)
+            "{} · {} · {} · {} new",
+            page_label(index, self.columns.len(), &column.topic.name),
+            source_icon,
+            sort_icon,
+            fresh
         );
         let ids: Vec<String> = visible.iter().map(|post| post.id.clone()).collect();
         let frames = layout_takes(width, &ids);
@@ -573,7 +578,7 @@ impl TrendsDesk {
                         list
                     })
                     .child(self.pinned_post_button(cx))
-                    .child(page_bar(label, cx)),
+                    .child(page_bar(label, index, &column.topic.sort, cx)),
             );
         let mut rows: Vec<gpui_kit::AnyElement> = vec![page.into_any_element()];
         if self.session.state == SessionState::Missing {
@@ -598,7 +603,37 @@ impl TrendsDesk {
     }
 }
 
-fn page_bar(label: String, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
+fn sort_toggle(column_index: usize, current_sort: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
+    let next_sort = if current_sort == "popular" { "newest" } else { "popular" };
+    let label = if current_sort == "popular" { "Top" } else { "Newest" };
+    button(
+        format!("desk-sort-toggle-{column_index}"),
+        label,
+        false,
+        cx.listener(move |this, _, _, cx| {
+            if let Some(column) = this.columns.get_mut(column_index) {
+                column.topic.sort = next_sort.into();
+                let query = termy_x::trends_desk::search_query(&column.topic.desc, &this.settings.focus);
+                let kept = column.view.posts.clone();
+                let source_label = if column.topic.search_source == "treg" { "Treg" } else { "OpenCLI" };
+                let sort_label = if column.topic.sort == "popular" { "Top" } else { "Newest" };
+                let topic_id = column.topic.id.clone();
+                column.view = termy_x::trends_desk::ColumnView {
+                    phase: termy_x::trends_desk::Phase::Loading,
+                    banner: format!("Refreshing {query} · {source_label} · {sort_label}. Cards below are saved."),
+                    posts: kept,
+                    posts_cached: true,
+                    query: query.to_string(),
+                };
+                this.start_run(std::slice::from_ref(&topic_id), cx);
+            }
+            cx.stop_propagation();
+            cx.notify();
+        }),
+    )
+}
+
+fn page_bar(label: String, col_idx: usize, sort: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
     // Painted last so a search result list cannot cover Next.
     debug_assert!(termy_x::trends_desk::next_click_reaches(
         true,
@@ -648,6 +683,7 @@ fn page_bar(label: String, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement
                 cx.notify();
             }),
         ))
+        .child(sort_toggle(col_idx, sort, cx))
         .into_any_element()
 }
 

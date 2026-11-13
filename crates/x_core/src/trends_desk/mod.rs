@@ -58,7 +58,7 @@ pub use domain::{
     ChangeTag, ColumnView, DeskSettings, GPU_NOTE, IMAGE_QUOTE_NOTE, Nav, OutcomeKind, Phase,
     RunOutcome, SourcePost, StoredReport, Surface, Topic, VISIBLE_NAME, chicago_stamp,
     column_count_for_width, column_from_cache, column_from_outcome, column_loading,
-    column_loading_keep, daily_due, default_topics, diff_urls, draft_text_from_title, filter_posts,
+    column_loading_keep, daily_due, default_search_source, default_sort, default_topics, diff_urls, draft_text_from_title, filter_posts,
     fixture_column, idea_from, outcome_error, reply_dry_run_args, search_query, shift_index,
     slug_id, surface_after_nav, topic_id_ok,
 };

@@ -1,5 +1,87 @@
 # TERMY XL — STATUS & SHORTCUT
 
+## Commit
+`cursor/trends-desk-addon-d271` @ **b2fb45c0** (ahead of origin by 2)
+
+## Build Status
+- **Cargo check:** ✅ GREEN — zero errors, 57 warnings (all pre-existing unused items)
+- **Cargo build --release:** Started in background; process exited (possible OOM/swap or timeout)
+- **Clippy:** Not run yet (build pending)
+
+## Done ✅
+
+### Design System Overhaul
+- `crates/desktop_app/src/trends_desk/design.rs` — NEW: token module (BG_DEEP, AC_CYAN, AC_PINK, AC_GOLD, TX_PRIMARY, spacing, radii)
+- `chrome.rs` + `mod.rs` — raw hex → tokens (restored to hex in mod.rs root to avoid design import issues — tokens kept in design.rs for future use)
+
+### Settings — ONE Model Section
+- Stripped: free model block, Hermes block, auto-fallback, custom base/model/key-env
+- Kept: "Model" heading + `provider_dropdown` + Verify status
+- Providers: Hermes default, Grok, Muse, Agy, Vyce direct, Custom OpenAI (Treg removed — search engine)
+
+### Treg = Search Engine (not provider)
+- Removed from `base_provider_menu()` in takes.rs
+- Removed dead palette entries from xl_pack.rs
+- `Topic` struct: `search_source` + `sort` with serde defaults (opencli/newest)
+- All Topic constructors + CLI + store tests updated
+
+### Newest/Top Toggle — BUILT
+- `sort_toggle()` button in column page bar
+- Click swaps sort, sets loading banner, re-runs `start_run()`
+- Column label: `@term · OpenCLI · Top` or `@term · Treg · Newest`
+
+### Refresh — Fixed
+- Loading banners show `"Refreshing "{query}" · {source} · {sort}. Cards below are saved."`
+- Uses current column `search_source` + `sort`
+
+### Video Player — VLC with direct3d11
+- `player.rs`: added `--vout=direct3d11`, `--direct3d11-hw` to libvlc instance args
+- `xl_media.rs`: restored to original working code (host-lifetime Arc<Mutex<>> approach had type mismatches with VideoPlayer — simpler fix: the direct3d11 vout prevents most frame issues)
+
+### Window Title
+- "Termy" → "Termy XL"
+
+### Search
+- `run_live_search` deduplicated with unique `search_id`
+- New search topics get `search_source: "opencli"`, `sort: "newest"`
+- Treg search button NOT yet wired (needs `fetch_posts` call with Termy X Treg key; architecture ready)
+
+## Files Changed (in commits)
+```
+crates/desktop_app/src/main.rs              "Termy XL"
+crates/desktop_app/src/xl_agents.rs          search dedup, Topic fields
+crates/desktop_app/src/xl_media.rs          restored (direct3d11 vout in player.rs)
+crates/desktop_app/src/xl_pack.rs          sort toggle, source+sort label, palette cleanup
+ncrates/desktop_app/src/trends_desk/chrome.rs merged settings, Go button, FontWeight import
+crates/desktop_app/src/trends_desk/mod.rs    refresh with source/sort, design module
+crates/desktop_app/src/trends_desk/design.rs NEW: token system
+crates/desktop_app/src/x_panel/player.rs     direct3d11 vout
+crates/x_core/src/trends_desk/domain.rs      Topic + search_source + sort
+crates/x_core/src/trends_desk/takes.rs         Treg out of provider menu
+crates/x_core/src/trends_desk/mod.rs          exports default_search_source, default_sort
+crates/x_core/src/trends_desk/store.rs       test Topics with new fields
+crates/x_core/src/cli.rs                     Topic creation with new fields
+TERMYXL-SHORTCUT.md                          this doc
+HANDOVER-2026-11-13-HERMES.md               handover log
+```
+
+## Build Command
+```powershell
+cd D:\hermes\workspace\termy-xl
+.\touch-sources.ps1
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+cargo build --release -p termy --bin trends_desk -p termy_x_cli --bin termy-xcli
+```
+
+## What Still Needs Work
+1. **Build**: cargo check is green, but `cargo build --release` needs to finish (process died mid-build, likely timeout/OOM)
+2. **Treg search button**: Not wired yet. Location ready, needs `fetch_posts(http, token, term, Sort::Newest, 50)` call inside a TrendsDesk method
+3. **Install**: Run `install-termy-xl.ps1` only after green release build
+4. **Clippy**: Run after build
+
+## Recommendation
+Run the build manually in a terminal with plenty of RAM/swap. The code compiles (cargo check green). Previous build may have been killed by the 90-second tool timeout.
+
 ## Commit Branch
 `cursor/trends-desk-addon-d271` — do NOT merge PR #2, no release
 

@@ -9,7 +9,6 @@ use gpui_kit::{
     App, AppContext, Context, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
     ParentElement, Render, StatefulInteractiveElement, Styled, Window, div, px, rgb,
 };
-use super::design::*;
 use termy_x::XConfig;
 use termy_x::io::SystemRunner;
 use termy_x::trends_desk::{
@@ -882,6 +881,8 @@ impl TrendsDesk {
             id,
             name: self.topic_name.trim().to_string(),
             desc: self.topic_desc.trim().to_string(),
+            search_source: termy_x::trends_desk::default_search_source(),
+            sort: termy_x::trends_desk::default_sort(),
         };
         self.columns.push(ColumnUi {
             view: column_from_cache(None),
@@ -1400,8 +1401,8 @@ impl Render for TrendsDesk {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(BG_DEEP))
-            .text_color(rgb(TX_PRIMARY));
+            .bg(rgb(0x070b14))
+            .text_color(rgb(0xe5e5ea));
         if width <= DOCK_WIDTH + 8.0 {
             root = root.items_center().justify_center().child(self.xl_mark(cx));
         } else {

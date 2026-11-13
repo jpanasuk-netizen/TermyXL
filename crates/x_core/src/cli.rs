@@ -727,6 +727,8 @@ fn trends_desk_cmd(
                 id: id.clone(),
                 name,
                 desc,
+                search_source: crate::trends_desk::default_search_source(),
+                sort: crate::trends_desk::default_sort(),
             });
             if let Err(error) = store.save_topics(&topics) {
                 eprintln!("{error}");

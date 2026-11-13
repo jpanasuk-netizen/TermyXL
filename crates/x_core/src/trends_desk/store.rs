@@ -264,6 +264,8 @@ mod tests {
                 id: "custom".into(),
                 name: "Custom".into(),
                 desc: "local column".into(),
+                search_source: default_search_source(),
+                sort: default_sort(),
             },
         ];
         store.save_topics(&topics).unwrap();
@@ -274,6 +276,8 @@ mod tests {
                     id: "../escape".into(),
                     name: "nope".into(),
                     desc: "nope".into(),
+                    search_source: default_search_source(),
+                    sort: default_sort(),
                 }])
                 .is_err()
         );

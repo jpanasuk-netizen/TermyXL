@@ -1,7 +1,7 @@
 //! Header, navigation, and settings for the Termy XL window.
 
 use gpui_kit::{
-    App, AppContext, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
+    App, AppContext, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
     ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb,
 };
 

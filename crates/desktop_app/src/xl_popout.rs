@@ -95,17 +95,16 @@ impl TrendsDesk {
                     .text_color(rgb(0x070b14))
                     .whitespace_normal()
                     .child(if status.is_empty() {
-                        "Status".into()
+                        SharedString::default()
                     } else {
-                        status.clone()
+                        status.clone().into()
                     }),
             )
             .child(self.provider_dropdown(cx))
             .child(self.take_carousel(cx))
-            .children(
-                (self.take_generating || drafting)
-                    .then(|| crate::xl_mark::drafting_mark(self.elapsed_secs())),
-            )
+            .children(self.take_generating.then(|| {
+                crate::xl_mark::drafting_mark(self.elapsed_secs())
+            }))
             .children((!self.take_banner.is_empty()).then(|| self.failure_banner(cx)))
             .children((drafting || self.take_generating).then(|| self.cancel_row(cx)))
             .child(
@@ -133,11 +132,7 @@ impl TrendsDesk {
                         .absolute()
                         .size_full(),
                     )
-                    .child(if drafting {
-                        crate::xl_mark::drafting_mark(self.elapsed_secs())
-                    } else {
-                        crate::xl_mark::reply_surface(&shown, &caret)
-                    })
+                    .child(crate::xl_mark::reply_surface(&shown, &caret))
                     .children((!drafting).then(|| {
                         div()
                             .text_size(px(11.0))

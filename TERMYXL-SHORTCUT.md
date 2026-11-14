@@ -1,12 +1,18 @@
 # TERMY XL — STATUS & SHORTCUT
 
 ## Commit
-`cursor/trends-desk-addon-d271` @ **b2fb45c0** (ahead of origin by 2)
+`cursor/trends-desk-addon-d271` @ **18a2df43**
 
 ## Build Status
-- **Cargo check:** ✅ GREEN — zero errors, 57 warnings (all pre-existing unused items)
-- **Cargo build --release:** Started in background; process exited (possible OOM/swap or timeout)
-- **Clippy:** Not run yet (build pending)
+- **Cargo check:** ✅ GREEN
+- **Cargo build --release:** ✅ GREEN — 8m 32s
+- **Clippy:** ✅ GREEN — zero errors
+
+## Install Status
+- **Installed to:** `C:\Users\jpana\AppData\Local\Termy XL\`
+- **trends_desk.exe:** 24.7 MB (built Nov 13 09:24)
+- **termy-xcli.exe:** 9.0 MB
+- **Shortcuts:** Desktop + Start Menu
 
 ## Done ✅
 

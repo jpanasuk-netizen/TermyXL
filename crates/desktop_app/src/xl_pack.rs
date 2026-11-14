@@ -578,7 +578,7 @@ impl TrendsDesk {
                         list
                     })
                     .child(self.pinned_post_button(cx))
-                    .child(page_bar(label, index, &column.topic.sort, cx)),
+                    .child(page_bar(label, index, &column.topic.sort, &column.topic.search_source, cx)),
             );
         let mut rows: Vec<gpui_kit::AnyElement> = vec![page.into_any_element()];
         if self.session.state == SessionState::Missing {
@@ -633,7 +633,25 @@ fn sort_toggle(column_index: usize, current_sort: &str, cx: &mut Context<TrendsD
     )
 }
 
-fn page_bar(label: String, col_idx: usize, sort: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
+fn source_toggle(column_index: usize, current_source: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
+    let next_source = if current_source == "treg" { "opencli" } else { "treg" };
+    let label = if current_source == "treg" { "OpenCLI" } else { "Treg" };
+    button(
+        format!("desk-source-toggle-{column_index}"),
+        label,
+        false,
+        cx.listener(move |this, _, _, cx| {
+            if let Some(column) = this.columns.get_mut(column_index) {
+                column.topic.search_source = next_source.to_string();
+                this.save_pack_file();
+            }
+            cx.stop_propagation();
+            cx.notify();
+        }),
+    )
+}
+
+fn page_bar(label: String, col_idx: usize, sort: &str, source: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
     // Painted last so a search result list cannot cover Next.
     debug_assert!(termy_x::trends_desk::next_click_reaches(
         true,
@@ -684,6 +702,7 @@ fn page_bar(label: String, col_idx: usize, sort: &str, cx: &mut Context<TrendsDe
             }),
         ))
         .child(sort_toggle(col_idx, sort, cx))
+        .child(source_toggle(col_idx, source, cx))
         .into_any_element()
 }
 

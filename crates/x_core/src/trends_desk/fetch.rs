@@ -121,6 +121,9 @@ impl OpenCliDesk {
         if query.is_empty() {
             return outcome_error(topic, focus, "column description is empty");
         }
+        if topic.search_source == "treg" {
+            return self.run_treg_search(topic, focus, cancel);
+        }
         if let Err(error) = self.preflight() {
             return outcome_error(topic, focus, error);
         }
@@ -137,6 +140,56 @@ impl OpenCliDesk {
                     outcome_error(topic, focus, shorten(&redact_secrets(&message)))
                 }
             },
+        }
+    }
+
+    fn run_treg_search(&self, topic: &Topic, focus: &str, cancel: &AtomicBool) -> RunOutcome {
+        let query = search_query(&topic.desc, focus);
+        let http = crate::io::UreqHttp::default();
+        let treg_key = crate::reply_guy::load_secret(
+            &crate::XConfig::default(),
+            crate::reply_guy::Secret::Treg,
+        );
+        let Some(token) = treg_key else {
+            return outcome_error(topic, focus, "Treg key not found. Set TERMY_X_TREG_TOKEN or TREG_TOKEN.");
+        };
+        if cancel.load(Ordering::Relaxed) {
+            return outcome_error(topic, focus, "cancelled");
+        }
+        let sort = if topic.sort == "popular" {
+            crate::reply_guy::Sort::Popular
+        } else {
+            crate::reply_guy::Sort::Newest
+        };
+        match crate::reply_guy::fetch_posts(&http, &token, &query, sort, 50) {
+            Ok(fetched) => {
+                let posts: Vec<SourcePost> = fetched.posts.into_iter()
+                    .map(|post| {
+                        let media_urls: Vec<String> = post.media.iter().map(|m| m.url.clone()).collect();
+                        SourcePost {
+                            id: post.id,
+                            author: if post.author_handle.is_empty() { post.author_name.clone() } else { post.author_handle },
+                            text: post.text,
+                            created_at: post.created_at,
+                            url: post.url.clone(),
+                            source_url: post.url,
+                            likes: post.likes,
+                            reposts: post.reposts,
+                            views: post.views,
+                            replies: post.replies,
+                            author_name: post.author_name,
+                            media: media_urls,
+                            media_items: post.media,
+                            quoted: None,
+                            verified: false,
+                            lang: String::new(),
+                            in_reply_to: None,
+                        }
+                    })
+                    .collect();
+                outcome_from_posts(topic, focus, posts)
+            }
+            Err(error) => outcome_error(topic, focus, &format!("Treg search failed: {error}")),
         }
     }
 

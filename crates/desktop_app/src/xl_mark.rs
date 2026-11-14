@@ -33,7 +33,7 @@ pub(crate) fn reply_surface(
     let before = text.get(..start).unwrap_or("");
     let middle = text.get(start..end).unwrap_or("");
     let after = text.get(end..).unwrap_or("");
-    let mut row = div().flex().flex_wrap();
+    let mut row = div().flex();
     if !before.is_empty() {
         row = row.child(before.to_string());
     }

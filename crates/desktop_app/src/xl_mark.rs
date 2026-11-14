@@ -30,33 +30,14 @@ pub(crate) fn reply_surface(
         .unwrap_or((caret.caret.min(len), caret.caret.min(len)));
     let start = start.min(len);
     let end = end.min(len).max(start);
-    let before = text.get(..start).unwrap_or("");
-    let middle = text.get(start..end).unwrap_or("");
-    let after = text.get(end..).unwrap_or("");
-    let mut row = div().flex();
-    if !before.is_empty() {
-        row = row.child(before.to_string());
-    }
-    if middle.is_empty() {
-        row = row.child(
-            div()
-                .w(px(2.0))
-                .h(px(18.0))
-                .bg(rgb(0xffe56a))
-                .with_animation("desk-caret", breath_animation(), |el, value| {
-                    el.opacity(0.15 + 0.85 * value)
-                }),
-        );
+
+    let display = if start == end {
+        let before = text.get(..start).unwrap_or("");
+        let after = text.get(end..).unwrap_or("");
+        format!("{}│{}", before, after)
     } else {
-        row = row.child(
-            div()
-                .bg(rgb(0xff4fa3))
-                .text_color(rgb(0x070b14))
-                .child(middle.to_string()),
-        );
-    }
-    if !after.is_empty() {
-        row = row.child(after.to_string());
-    }
-    row.into_any_element()
+        text.to_string()
+    };
+
+    div().flex().child(display).into_any_element()
 }

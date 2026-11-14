@@ -1,18 +1,19 @@
 # TERMY XL — STATUS & SHORTCUT
 
 ## Commit
-`cursor/trends-desk-addon-d271` @ **18a2df43**
+`cursor/trends-desk-addon-d271` @ **b0cd223f**
 
 ## Build Status
-- **Cargo check:** ✅ GREEN
-- **Cargo build --release:** ✅ GREEN — 8m 32s
-- **Clippy:** ✅ GREEN — zero errors
+- **Cargo check:** ✅ GREEN (zero errors)
+- **Cargo build --release:** ✅ GREEN — 2m 46s
+- **Clippy:** ✅ GREEN — zero errors, 167 warnings (all pre-existing)
 
 ## Install Status
 - **Installed to:** `C:\Users\jpana\AppData\Local\Termy XL\`
-- **trends_desk.exe:** 24.7 MB (built Nov 13 09:24)
-- **termy-xcli.exe:** 9.0 MB
+- **trends_desk.exe:** 24 MB (built Nov 14 08:41)
+- **termy-xcli.exe:** 8.6 MB
 - **Shortcuts:** Desktop + Start Menu
+- **Backups:** `trends_desk.exe.20261114-084130.bak`, `termy-xcli.exe.20261114-084131.bak`
 
 ## Done ✅
 
@@ -47,28 +48,44 @@
 ### Window Title
 - "Termy" → "Termy XL"
 
-### Search
-- `run_live_search` deduplicated with unique `search_id`
-- New search topics get `search_source: "opencli"`, `sort: "newest"`
-- Treg search button NOT yet wired (needs `fetch_posts` call with Termy X Treg key; architecture ready)
+### Reply Editor — Fixed
+- `xl_popout.rs`: removed duplicate `drafting_mark` countdown (was showing in 3 places: carousel, outer editor, inner editor)
+- `xl_popout.rs`: removed inner `drafting_mark` that replaced text surface during editing (text now always visible)
+- `xl_mark.rs`: `reply_surface` renders as single element — no more row-shift when clicking (caret moved → `before`/`middle`/`after` widths changed, rewrapping text)
+- `xl_popout.rs`: "Status" placeholder removed
+
+### Take Carousel — Capped at 3 Variants
+- `xl_popout.rs`: `take_carousel` shows max 3 cards with "Use this" buttons, plus `+N more` label
+- Eliminates the "32 reply variants" visual overload
+
+### Treg Search Engine — WIRED
+- `fetch.rs`: `run_topic()` routes `search_source == "treg"` → `run_treg_search()`
+- `run_treg_search() loads `TERMY_X_TREG_TOKEN`, calls `fetch_posts(token, query, sort, 50)`
+- Maps `reply_guy::Post` → `SourcePost` with proper field extraction
+- Sort: `"popular"` → `Sort::Popular`, else `Sort::Newest`
+- `xl_pack.rs`: `source_toggle(column_index, current_source)` button swaps OpenCLI↔Treg
+- Column label: `@term · OpenCLI · Newest` or `@term · Treg · Popular`
 
 ## Files Changed (in commits)
 ```
-crates/desktop_app/src/main.rs              "Termy XL"
-crates/desktop_app/src/xl_agents.rs          search dedup, Topic fields
-crates/desktop_app/src/xl_media.rs          restored (direct3d11 vout in player.rs)
-crates/desktop_app/src/xl_pack.rs          sort toggle, source+sort label, palette cleanup
-ncrates/desktop_app/src/trends_desk/chrome.rs merged settings, Go button, FontWeight import
-crates/desktop_app/src/trends_desk/mod.rs    refresh with source/sort, design module
-crates/desktop_app/src/trends_desk/design.rs NEW: token system
-crates/desktop_app/src/x_panel/player.rs     direct3d11 vout
-crates/x_core/src/trends_desk/domain.rs      Topic + search_source + sort
-crates/x_core/src/trends_desk/takes.rs         Treg out of provider menu
-crates/x_core/src/trends_desk/mod.rs          exports default_search_source, default_sort
-crates/x_core/src/trends_desk/store.rs       test Topics with new fields
-crates/x_core/src/cli.rs                     Topic creation with new fields
-TERMYXL-SHORTCUT.md                          this doc
-HANDOVER-2026-11-13-HERMES.md               handover log
+crates/desktop_app/src/main.rs                  "Termy XL"
+crates/desktop_app/src/xl_agents.rs             search dedup, Topic fields
+crates/desktop_app/src/xl_media.rs              restored (direct3d11 vout in player.rs)
+crates/desktop_app/src/xl_mark.rs               reply_surface: single-element render (no jitter)
+crates/desktop_app/src/xl_pack.rs               sort toggle, source toggle, source+sort label, palette cleanup
+crates/desktop_app/src/xl_popout.rs             editor dedup, take carousel 3-card cap
+crates/desktop_app/src/trends_desk/chrome.rs     merged settings, Go button
+crates/desktop_app/src/trends_desk/mod.rs         refresh with source/sort, design module
+crates/desktop_app/src/trends_desk/design.rs      NEW: token system
+crates/desktop_app/src/x_panel/player.rs          direct3d11 vout
+crates/x_core/src/trends_desk/fetch.rs            Treg search path (run_treg_search)
+crates/x_core/src/trends_desk/domain.rs           Topic + search_source + sort
+crates/x_core/src/trends_desk/takes.rs            Treg out of provider menu
+crates/x_core/src/trends_desk/mod.rs              exports default_search_source, default_sort
+crates/x_core/src/trends_desk/store.rs            test Topics with new fields
+crates/x_core/src/cli.rs                          Topic creation with new fields
+TERMYXL-SHORTCUT.md                               this doc
+HANDOVER-2026-11-13-HERMES.md                    handover log
 ```
 
 ## Build Command
@@ -80,10 +97,9 @@ cargo build --release -p termy --bin trends_desk -p termy_x_cli --bin termy-xcli
 ```
 
 ## What Still Needs Work
-1. **Build**: cargo check is green, but `cargo build --release` needs to finish (process died mid-build, likely timeout/OOM)
-2. **Treg search button**: Not wired yet. Location ready, needs `fetch_posts(http, token, term, Sort::Newest, 50)` call inside a TrendsDesk method
-3. **Install**: Run `install-termy-xl.ps1` only after green release build
-4. **Clippy**: Run after build
+1. **Clickable tweet URLs**: Cards show URL as cyan text with "Copy link" button, but no click-to-open-browser
+2. **Reply editing duplication**: "3 places counting down" and row-shift — FIXED in b0cd223f
+3. **Treg search**: Wired in e7efaae3.
 
 ## Recommendation
 Run the build manually in a terminal with plenty of RAM/swap. The code compiles (cargo check green). Previous build may have been killed by the 90-second tool timeout.

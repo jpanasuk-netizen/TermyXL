@@ -383,6 +383,20 @@ impl TrendsDesk {
                         }),
                     ))
                     .child(button(
+                        SharedString::from(format!("desk-open-{id}")),
+                        "Open",
+                        false,
+                        cx.listener({
+                            let url = card.url.clone();
+                            move |this, _, _, cx| {
+                                let _ = webbrowser::open(&url);
+                                this.action_note = "Opened in browser.".into();
+                                cx.stop_propagation();
+                                cx.notify();
+                            }
+                        }),
+                    ))
+                    .child(button(
                         SharedString::from(format!("desk-copy-text-{id}")),
                         "Copy text",
                         false,

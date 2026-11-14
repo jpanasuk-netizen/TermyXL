@@ -635,7 +635,7 @@ fn sort_toggle(column_index: usize, current_sort: &str, cx: &mut Context<TrendsD
 
 fn source_toggle(column_index: usize, current_source: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
     let next_source = if current_source == "treg" { "opencli" } else { "treg" };
-    let label = if current_source == "treg" { "OpenCLI" } else { "Treg" };
+    let label = if current_source == "treg" { "Switch to OpenCLI" } else { "Switch to Treg" };
     button(
         format!("desk-source-toggle-{column_index}"),
         label,

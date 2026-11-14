@@ -1047,68 +1047,164 @@ impl TrendsDesk {
     fn take_carousel(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let index = self.take_index;
         let generating = self.take_generating;
-        let count = termy_x::trends_desk::indicator(self.take_cards.len(), index, generating);
-        let shown = if generating && !self.stream_take.is_empty() {
-            self.stream_take.clone()
-        } else if generating {
-            format!("… {}s", self.elapsed_secs())
-        } else if let Some(card) = self.take_cards.get(index) {
-            format!("{}\n{}", card.provider, card.text)
-        } else {
-            "Press → for a take.".into()
-        };
-        div()
-            .flex()
-            .items_center()
-            .gap(px(8.0))
-            .child(box_button("desk-take-left", "←", cx, |this, cx| {
+
+        if !self.take_cards.is_empty() && !generating {
+            // Multi-card row: show up to 3 cards side by side
+            let total = self.take_cards.len();
+            let mut row = div().flex().items_center().gap(px(8.0));
+
+            row = row.child(box_button("desk-take-left", "←", cx, |this, cx| {
                 this.carousel_keys = true;
                 this.nudge_carousel(-1, cx);
-            }))
-            .child(
-                div()
-                    .id("desk-take-card")
-                    .w(px(240.0))
-                    .min_h(px(72.0))
-                    .p(px(8.0))
-                    .rounded(px(8.0))
-                    .bg(rgb(0x2a1020))
-                    .text_size(px(14.0))
-                    .text_color(rgb(0xffe56a))
-                    .whitespace_normal()
-                    .cursor_pointer()
-                    .child(shown)
-                    .child(
-                        div()
-                            .mt(px(6.0))
-                            .text_size(px(12.0))
-                            .text_color(rgb(0x7af6ff))
-                            .child(count),
-                    )
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, _, _, cx| {
-                            this.carousel_keys = true;
-                            this.use_current_take();
-                            cx.stop_propagation();
-                            cx.notify();
-                        }),
-                    )
-                    .with_animation(
-                        SharedString::from(format!("desk-slide-{index}-{generating}")),
-                        Animation::new(std::time::Duration::from_millis(280)),
-                        |card, t| card.ml(px((1.0 - t) * 32.0)),
-                    ),
-            )
-            .child(box_button("desk-take-right", "→", cx, |this, cx| {
+            }));
+
+            let window_start = if total <= 3 {
+                0
+            } else {
+                index.saturating_sub(1).min(total.saturating_sub(3))
+            };
+
+            for (offset, card) in self.take_cards.iter().enumerate().skip(window_start).take(3) {
+                let card_index = offset;
+                let is_current = card_index == index;
+                let border_color = if is_current {
+                    rgb(0x7af6ff)
+                } else {
+                    rgb(0xffe56a)
+                };
+
+                row = row.child(
+                    div()
+                        .id(format!("desk-take-card-{card_index}"))
+                        .w(px(200.0))
+                        .min_h(px(72.0))
+                        .p(px(8.0))
+                        .rounded(px(8.0))
+                        .bg(rgb(0x2a1020))
+                        .border_1()
+                        .border_color(border_color)
+                        .text_size(px(13.0))
+                        .text_color(rgb(0xffe56a))
+                        .whitespace_normal()
+                        .cursor_pointer()
+                        .child(format!("{}\n{}", card.provider, card.text))
+                        .child(
+                            div()
+                                .mt(px(4.0))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .child(
+                                    div()
+                                        .text_size(px(11.0))
+                                        .text_color(rgb(0xc7c7cc))
+                                        .child(format!("{} / {}", card_index + 1, total)),
+                                )
+                                .child(
+                                    box_button(
+                                        &format!("desk-take-use-{card_index}"),
+                                        "Use this",
+                                        cx,
+                                        move |this, cx| {
+                                            this.take_index = card_index;
+                                            this.use_current_take();
+                                            cx.notify();
+                                        },
+                                    ),
+                                ),
+                        )
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _, _, cx| {
+                                this.carousel_keys = true;
+                                this.take_index = card_index;
+                                this.use_current_take();
+                                cx.stop_propagation();
+                                cx.notify();
+                            }),
+                        ),
+                );
+            }
+
+            row = row.child(box_button("desk-take-right", "→", cx, |this, cx| {
                 this.carousel_keys = true;
                 this.nudge_carousel(1, cx);
-            }))
-            .child(box_button("desk-take-use", "Use this", cx, |this, cx| {
-                this.use_current_take();
-                cx.notify();
-            }))
-            .into_any_element()
+            }));
+
+            if total > 3 {
+                row = row.child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(rgb(0xc7c7cc))
+                        .child(format!("+{} more", total - 3)),
+                );
+            }
+
+            row.into_any_element()
+        } else {
+            // Single card view (generating or empty)
+            let shown = if generating && !self.stream_take.is_empty() {
+                self.stream_take.clone()
+            } else if generating {
+                format!("… {}s", self.elapsed_secs())
+            } else {
+                "Press → for a take.".into()
+            };
+            let count = termy_x::trends_desk::indicator(self.take_cards.len(), index, generating);
+
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(box_button("desk-take-left", "←", cx, |this, cx| {
+                    this.carousel_keys = true;
+                    this.nudge_carousel(-1, cx);
+                }))
+                .child(
+                    div()
+                        .id("desk-take-card")
+                        .w(px(240.0))
+                        .min_h(px(72.0))
+                        .p(px(8.0))
+                        .rounded(px(8.0))
+                        .bg(rgb(0x2a1020))
+                        .text_size(px(14.0))
+                        .text_color(rgb(0xffe56a))
+                        .whitespace_normal()
+                        .cursor_pointer()
+                        .child(shown)
+                        .child(
+                            div()
+                                .mt(px(6.0))
+                                .text_size(px(12.0))
+                                .text_color(rgb(0x7af6ff))
+                                .child(count),
+                        )
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _, _, cx| {
+                                this.carousel_keys = true;
+                                this.use_current_take();
+                                cx.stop_propagation();
+                                cx.notify();
+                            }),
+                        )
+                        .with_animation(
+                            SharedString::from(format!("desk-slide-{index}-{generating}")),
+                            Animation::new(std::time::Duration::from_millis(280)),
+                            |card, t| card.ml(px((1.0 - t) * 32.0)),
+                        ),
+                )
+                .child(box_button("desk-take-right", "→", cx, |this, cx| {
+                    this.carousel_keys = true;
+                    this.nudge_carousel(1, cx);
+                }))
+                .child(box_button("desk-take-use", "Use this", cx, |this, cx| {
+                    this.use_current_take();
+                    cx.notify();
+                }))
+                .into_any_element()
+        }
     }
 
     fn failure_banner(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {

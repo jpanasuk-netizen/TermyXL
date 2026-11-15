@@ -372,9 +372,6 @@ impl TrendsDesk {
     }
 
     pub(crate) fn maybe_refresh(&mut self, cx: &mut Context<Self>) {
-        if self.options.fixture {
-            return;
-        }
         let now = Self::now_unix();
         if !termy_x::trends_desk::should_auto_refresh(
             self.pack.last_refresh,
@@ -551,7 +548,7 @@ impl TrendsDesk {
                                     .items_center()
                                     .gap(px(8.0))
                                     .h(px(36.0))
-                                    .child("Not run yet.")
+                                    .child("No results yet. Search for a topic.")
                                     .child(refresh_button(topic_id.clone(), cx)),
                             );
                         }

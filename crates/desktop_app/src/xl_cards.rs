@@ -63,7 +63,7 @@ impl TrendsDesk {
                 (take.note.clone(), Some("Retry".to_string()))
             }
             Some(take) => (take.text.clone(), None),
-            None => (termy_x::trends_desk::CLICK_TO_DRAFT.to_string(), None),
+            None => (String::new(), None),
         };
         let editing = self
             .popout

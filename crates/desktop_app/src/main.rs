@@ -763,8 +763,7 @@ fn main() {
         std::process::exit(0);
     }
     if cli_args.iter().any(|arg| arg == "--trends-desk") {
-        let fixture = cli_args.iter().any(|arg| arg == "--fixture");
-        termy::trends_desk::run_standalone(fixture);
+        termy::trends_desk::run_standalone();
         return;
     }
     if cli_args

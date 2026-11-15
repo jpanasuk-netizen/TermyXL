@@ -16,16 +16,15 @@ use termy_x::trends_desk::{
     InspectedPost, Nav, OpenCliDesk, OutcomeKind, Phase, ReplyPhase, RunOutcome, SessionState,
     SessionStatus, Surface, TakeProvider, Topic, VISIBLE_NAME, close_editor,
     column_count_for_width, column_from_cache, column_from_outcome, column_loading_keep, daily_due,
-    drafts_file, edit_reply, editor_send, filter_posts, fixture_column, frame_from_parts,
+    drafts_file, edit_reply, editor_send, filter_posts, frame_from_parts,
     isolated_opencli_config, open_editor, prepare_draft_file, surface_after_nav,
-    synthetic_fixture_posts, termy_xl_data_root, within_termy_x_config,
+    termy_xl_data_root, within_termy_x_config,
 };
 
 pub(crate) mod design;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DeskOptions {
-    pub fixture: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -203,11 +202,7 @@ impl TrendsDesk {
             .into_iter()
             .map(|topic| {
                 let cached = store.latest(&topic.id);
-                let view = if options.fixture {
-                    fixture_column(&topic, fixture_posts_for(&topic))
-                } else {
-                    column_from_cache(cached.as_ref())
-                };
+                let view = column_from_cache(cached.as_ref());
                 ColumnUi {
                     topic,
                     view,
@@ -345,9 +340,6 @@ impl TrendsDesk {
     }
 
     fn fetch_empty_subjects(&mut self, cx: &mut Context<Self>) {
-        if self.options.fixture {
-            return;
-        }
         let ids: Vec<String> = self
             .columns
             .iter()
@@ -427,8 +419,7 @@ impl TrendsDesk {
     }
 
     fn maybe_daily(&mut self, cx: &mut Context<Self>) {
-        if self.options.fixture
-            || self.busy
+        if self.busy
             || !daily_due(termy_x::time::unix_now(), &self.settings)
         {
             return;
@@ -445,11 +436,6 @@ impl TrendsDesk {
     }
 
     pub(crate) fn start_run(&mut self, ids: &[String], cx: &mut Context<Self>) {
-        if self.options.fixture {
-            self.action_note = "Fixture mode does not call OpenCLI.".into();
-            cx.notify();
-            return;
-        }
         self.action_note = "Loading…".into();
         self.generation = self.generation.saturating_add(1);
         let generation = self.generation;
@@ -594,12 +580,6 @@ impl TrendsDesk {
     }
 
     fn inspect(&mut self, query: String, cx: &mut Context<Self>) {
-        if self.options.fixture {
-            self.reply_note = "Fixture mode does not read replies.".into();
-            self.surface = Surface::Replies;
-            cx.notify();
-            return;
-        }
         self.surface = Surface::Replies;
         self.reply_note = format!("Loading replies for “{query}”…");
         cx.notify();
@@ -635,15 +615,6 @@ impl TrendsDesk {
     }
 
     fn prepare(&mut self, title: &str, reply_to: Option<String>, cx: &mut Context<Self>) {
-        if self.options.fixture {
-            self.draft_text = termy_x::trends_desk::draft_text_from_title(title);
-            self.draft_reply_to = reply_to;
-            self.draft_note = "Fixture mode kept this draft in the window and did not write it. Nothing was posted.".into();
-            self.surface = Surface::Draft;
-            self.field = Some(Field::Draft);
-            cx.notify();
-            return;
-        }
         let path = drafts_file(&self.data_root);
         if !self.writable || within_termy_x_config(&path) {
             self.draft_text = termy_x::trends_desk::draft_text_from_title(title);
@@ -1282,19 +1253,6 @@ impl TrendsDesk {
     }
 }
 
-fn fixture_posts_for(topic: &Topic) -> Vec<termy_x::trends_desk::SourcePost> {
-    let mut posts = synthetic_fixture_posts();
-    for post in &mut posts {
-        let rest = post
-            .text
-            .trim_start_matches("SYNTHETIC FIXTURE:")
-            .trim_start_matches("SYNTHETIC FIXTURE")
-            .trim();
-        post.text = format!("SYNTHETIC FIXTURE · {} column · {rest}", topic.name);
-    }
-    posts
-}
-
 fn paced_wait(cancel: &AtomicBool) {
     let started = std::time::Instant::now();
     while started.elapsed() < Duration::from_millis(1500) {
@@ -1328,7 +1286,7 @@ pub fn open_in(cx: &mut App, options: DeskOptions) -> Result<(), String> {
     .map_err(|error| error.to_string())
 }
 
-pub fn run_standalone(fixture: bool) {
+pub fn run_standalone() {
     set_standalone_app_id();
     let root = termy_xl_data_root();
     termy_x::trends_desk::install_panic_log(&root);
@@ -1344,7 +1302,7 @@ pub fn run_standalone(fixture: bool) {
     };
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
-        if let Err(error) = open_in(cx, DeskOptions { fixture }) {
+        if let Err(error) = open_in(cx, DeskOptions::default()) {
             termy_x::trends_desk::append_desk_log(
                 &termy_xl_data_root(),
                 &format!("INFO startup: window did not open: {error}"),

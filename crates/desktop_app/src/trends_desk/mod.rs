@@ -132,12 +132,9 @@ pub struct TrendsDesk {
     pub(crate) saved_urls: std::collections::HashSet<String>,
     pub(crate) list_pick: Option<String>,
     pub(crate) reader: Option<InlineRead>,
-    pub(crate) take_cards: Vec<termy_x::trends_desk::SavedTake>,
-    pub(crate) take_index: usize,
     pub(crate) take_generating: bool,
     pub(crate) take_started: Option<Instant>,
     pub(crate) take_banner: String,
-    pub(crate) carousel_keys: bool,
     pub(crate) stream_take: String,
     pub(crate) more_take: bool,
     pub(crate) draft_busy: HashSet<String>,
@@ -308,12 +305,9 @@ impl TrendsDesk {
             saved_urls,
             list_pick: None,
             reader: None,
-            take_cards: Vec::new(),
-            take_index: 0,
             take_generating: false,
             take_started: None,
             take_banner: String::new(),
-            carousel_keys: true,
             stream_take: String::new(),
             more_take: false,
             draft_busy: HashSet::new(),
@@ -701,13 +695,6 @@ impl TrendsDesk {
             self.send_from_popout(cx);
             return;
         }
-        if self.carousel_keys
-            && !event.keystroke.modifiers.shift
-            && (key == "left" || key == "right")
-        {
-            self.nudge_carousel(if key == "left" { -1 } else { 1 }, cx);
-            return;
-        }
         self.edit_reply_key(key, event, cx);
     }
 
@@ -769,6 +756,7 @@ impl TrendsDesk {
         if !stored.is_empty() {
             editor.variants = termy_x::trends_desk::distinct_variants(&text, &stored);
         }
+        self.reply_edit = Some(termy_x::draft_edit::ReplyEditor::new(&text));
         self.popout = Some(editor);
     }
 

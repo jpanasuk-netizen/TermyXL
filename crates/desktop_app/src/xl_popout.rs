@@ -27,12 +27,18 @@ impl TrendsDesk {
         if !pop.open || pop.card_id != card_id {
             return None;
         }
+        let generating = self.take_generating;
+        let shown = if self.take_generating && self.reply_edit.is_none() && self.stream_take.is_empty() {
+            format!("… {}", self.elapsed_secs())
+        } else if self.take_generating && self.reply_edit.is_none() {
+            self.stream_take.clone()
+        } else {
+            self.reply_edit
+                .as_ref()
+                .map(|editor| editor.text.clone())
+                .unwrap_or_else(|| pop.draft.clone())
+        };
         let drafting = pop.draft == termy_x::trends_desk::DRAFTING_PLACEHOLDER;
-        let shown = self
-            .reply_edit
-            .as_ref()
-            .map(|editor| editor.text.clone())
-            .unwrap_or_else(|| pop.draft.clone());
         let caret = self
             .reply_edit
             .as_ref()
@@ -81,29 +87,7 @@ impl TrendsDesk {
             .flex()
             .flex_col()
             .gap(px(8.0))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|_, _, _, cx| {
-                    cx.stop_propagation();
-                }),
-            )
-            .child(
-                div()
-                    .id("desk-reply-status")
-                    .text_size(px(13.0))
-                    .text_color(rgb(0x070b14))
-                    .whitespace_normal()
-                    .child(if status.is_empty() {
-                        SharedString::default()
-                    } else {
-                        status.clone().into()
-                    }),
-            )
             .child(self.provider_dropdown(cx))
-            .child(self.take_carousel(cx))
-            .children(self.take_generating.then(|| {
-                crate::xl_mark::drafting_mark(self.elapsed_secs())
-            }))
             .children((!self.take_banner.is_empty()).then(|| self.failure_banner(cx)))
             .children((drafting || self.take_generating).then(|| self.cancel_row(cx)))
             .child(
@@ -361,9 +345,12 @@ impl TrendsDesk {
     }
 
     fn place_reply_cursor(&mut self, x: f32, y: f32, extend: bool) {
-        self.carousel_keys = false;
-        let Some(mut editor) = self.reply_edit.clone() else {
-            return;
+        let mut editor = match self.reply_edit.clone() {
+            Some(e) => e,
+            None => {
+                let text = self.popout.as_ref().map(|p| p.draft.clone()).unwrap_or_default();
+                termy_x::draft_edit::ReplyEditor::new(&text)
+            }
         };
         let (origin_x, origin_y, width) = editor_box();
         if extend {
@@ -789,7 +776,6 @@ impl TrendsDesk {
             self.take_started = Some(std::time::Instant::now());
         }
         if open_compose && !self.more_take {
-            self.load_take_history(&id);
             self.show_inline_editor(&id, termy_x::trends_desk::DRAFTING_PLACEHOLDER);
         }
         self.more_take = false;
@@ -934,8 +920,6 @@ impl TrendsDesk {
         };
         termy_x::trends_desk::remember_saved_take(&mut self.pack, id, &next, &label, tone);
         self.save_pack_file();
-        self.take_cards = self.pack.takes.get(id).cloned().unwrap_or_default();
-        self.take_index = self.take_cards.len().saturating_sub(1);
         if let Some(pop) = self.popout.as_mut().filter(|pop| pop.card_id == id) {
             pop.draft = next.clone();
             pop.variants = termy_x::trends_desk::distinct_variants(&next, &result.variants);
@@ -956,45 +940,8 @@ impl TrendsDesk {
         self.selected = Some(format!("take:{id}"));
     }
 
-    fn load_take_history(&mut self, id: &str) {
-        self.take_cards = self.pack.takes.get(id).cloned().unwrap_or_default();
-        self.take_index = self.take_cards.len().saturating_sub(1);
-        self.carousel_keys = true;
-    }
 
-    pub(crate) fn nudge_carousel(&mut self, delta: i32, cx: &mut Context<Self>) {
-        match termy_x::trends_desk::slide(
-            self.take_cards.len(),
-            self.take_index,
-            self.take_generating,
-            delta,
-        ) {
-            termy_x::trends_desk::Slide::Stay => {}
-            termy_x::trends_desk::Slide::Move(index) => {
-                self.take_index = index;
-                self.use_current_take();
-                cx.notify();
-            }
-            termy_x::trends_desk::Slide::More => self.request_another_take(cx),
-        }
-    }
 
-    fn use_current_take(&mut self) {
-        let Some(card) = self.take_cards.get(self.take_index).cloned() else {
-            return;
-        };
-        let Some(pop) = self.popout.as_mut() else {
-            return;
-        };
-        pop.draft = card.text.clone();
-        self.pop_caret = termy_x::draft_edit::DraftCaret::at_end(card.text.len());
-        self.reply_edit = Some(termy_x::draft_edit::ReplyEditor::new(&card.text));
-        self.card_replies.insert(
-            pop.card_id.clone(),
-            edit_reply(&ReplyPhase::Idle, card.text),
-        );
-        self.take_banner.clear();
-    }
 
     pub(crate) fn request_another_take(&mut self, cx: &mut Context<Self>) {
         if self.take_generating {
@@ -1040,168 +987,6 @@ impl TrendsDesk {
             .unwrap_or(0)
     }
 
-    fn take_carousel(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
-        let index = self.take_index;
-        let generating = self.take_generating;
-
-        if !self.take_cards.is_empty() && !generating {
-            // Multi-card row: show up to 3 cards side by side
-            let total = self.take_cards.len();
-            let mut row = div().flex().items_center().gap(px(8.0));
-
-            row = row.child(box_button("desk-take-left", "←", cx, |this, cx| {
-                this.carousel_keys = true;
-                this.nudge_carousel(-1, cx);
-            }));
-
-            let window_start = if total <= 3 {
-                0
-            } else {
-                index.saturating_sub(1).min(total.saturating_sub(3))
-            };
-
-            for (offset, card) in self.take_cards.iter().enumerate().skip(window_start).take(3) {
-                let card_index = offset;
-                let is_current = card_index == index;
-                let border_color = if is_current {
-                    rgb(0x7af6ff)
-                } else {
-                    rgb(0xffe56a)
-                };
-
-                row = row.child(
-                    div()
-                        .id(format!("desk-take-card-{card_index}"))
-                        .w(px(200.0))
-                        .min_h(px(72.0))
-                        .p(px(8.0))
-                        .rounded(px(8.0))
-                        .bg(rgb(0x2a1020))
-                        .border_1()
-                        .border_color(border_color)
-                        .text_size(px(13.0))
-                        .text_color(rgb(0xffe56a))
-                        .whitespace_normal()
-                        .cursor_pointer()
-                        .child(format!("{}\n{}", card.provider, card.text))
-                        .child(
-                            div()
-                                .mt(px(4.0))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .child(
-                                    div()
-                                        .text_size(px(11.0))
-                                        .text_color(rgb(0xc7c7cc))
-                                        .child(format!("{} / {}", card_index + 1, total)),
-                                )
-                                .child(
-                                    box_button(
-                                        &format!("desk-take-use-{card_index}"),
-                                        "Use this",
-                                        cx,
-                                        move |this, cx| {
-                                            this.take_index = card_index;
-                                            this.use_current_take();
-                                            cx.notify();
-                                        },
-                                    ),
-                                ),
-                        )
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(move |this, _, _, cx| {
-                                this.carousel_keys = true;
-                                this.take_index = card_index;
-                                this.use_current_take();
-                                cx.stop_propagation();
-                                cx.notify();
-                            }),
-                        ),
-                );
-            }
-
-            row = row.child(box_button("desk-take-right", "→", cx, |this, cx| {
-                this.carousel_keys = true;
-                this.nudge_carousel(1, cx);
-            }));
-
-            if total > 3 {
-                row = row.child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(rgb(0xc7c7cc))
-                        .child(format!("+{} more", total - 3)),
-                );
-            }
-
-            row.into_any_element()
-        } else {
-            // Single card view (generating or empty)
-            let shown = if generating && !self.stream_take.is_empty() {
-                self.stream_take.clone()
-            } else if generating {
-                format!("… {}s", self.elapsed_secs())
-            } else {
-                "Press → for a take.".into()
-            };
-            let count = termy_x::trends_desk::indicator(self.take_cards.len(), index, generating);
-
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.0))
-                .child(box_button("desk-take-left", "←", cx, |this, cx| {
-                    this.carousel_keys = true;
-                    this.nudge_carousel(-1, cx);
-                }))
-                .child(
-                    div()
-                        .id("desk-take-card")
-                        .w(px(240.0))
-                        .min_h(px(72.0))
-                        .p(px(8.0))
-                        .rounded(px(8.0))
-                        .bg(rgb(0x2a1020))
-                        .text_size(px(14.0))
-                        .text_color(rgb(0xffe56a))
-                        .whitespace_normal()
-                        .cursor_pointer()
-                        .child(shown)
-                        .child(
-                            div()
-                                .mt(px(6.0))
-                                .text_size(px(12.0))
-                                .text_color(rgb(0x7af6ff))
-                                .child(count),
-                        )
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(|this, _, _, cx| {
-                                this.carousel_keys = true;
-                                this.use_current_take();
-                                cx.stop_propagation();
-                                cx.notify();
-                            }),
-                        )
-                        .with_animation(
-                            SharedString::from(format!("desk-slide-{index}-{generating}")),
-                            Animation::new(std::time::Duration::from_millis(280)),
-                            |card, t| card.ml(px((1.0 - t) * 32.0)),
-                        ),
-                )
-                .child(box_button("desk-take-right", "→", cx, |this, cx| {
-                    this.carousel_keys = true;
-                    this.nudge_carousel(1, cx);
-                }))
-                .child(box_button("desk-take-use", "Use this", cx, |this, cx| {
-                    this.use_current_take();
-                    cx.notify();
-                }))
-                .into_any_element()
-        }
-    }
 
     fn failure_banner(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let text = self.take_banner.clone();

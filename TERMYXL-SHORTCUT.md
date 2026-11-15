@@ -1,12 +1,13 @@
 # TERMY XL — STATUS & SHORTCUT
 
 ## Commit
-`cursor/trends-desk-addon-d271` @ **b0cd223f**
+`cursor/trends-desk-addon-d271` @ **156f9a70**
 
 ## Build Status
 - **Cargo check:** ✅ GREEN (zero errors)
-- **Cargo build --release:** ✅ GREEN — 2m 46s
+- **Cargo build --release:** ✅ GREEN — 2m 10s
 - **Clippy:** ✅ GREEN — zero errors, 167 warnings (all pre-existing)
+- **Cargo test:** Running (lib tests)
 
 ## Install Status
 - **Installed to:** `C:\Users\jpana\AppData\Local\Termy XL\`
@@ -97,9 +98,10 @@ cargo build --release -p termy --bin trends_desk -p termy_x_cli --bin termy-xcli
 ```
 
 ## What Still Needs Work
-1. **Clickable tweet URLs**: Cards show URL as cyan text with "Copy link" button, but no click-to-open-browser
-2. **Reply editing duplication**: "3 places counting down" and row-shift — FIXED in b0cd223f
-3. **Treg search**: Wired in e7efaae3.
+1. **Clickable tweet URLs**: ✅ "Open" button added (commit 3fa57d7d)
+2. **Reply editing**: ✅ Editor deduped, text jitter fixed, char count removed (commits b0cd223f, c751abf8)
+3. **Fake cards/placeholder**: ✅ Removed fixture mode, empty state shown (commit 156f9a70)
+4. **Treg**: ✅ Wired (commit e7efaae3)
 
 ## Recommendation
 Run the build manually in a terminal with plenty of RAM/swap. The code compiles (cargo check green). Previous build may have been killed by the 90-second tool timeout.

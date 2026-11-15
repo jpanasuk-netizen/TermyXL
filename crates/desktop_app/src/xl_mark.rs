@@ -8,6 +8,18 @@ pub(crate) fn breath_animation() -> Animation {
         .with_easing(|t| 0.5 - 0.5 * (t * std::f32::consts::TAU).cos())
 }
 
+pub(crate) fn breathing_ellipsis() -> gpui_kit::AnyElement {
+    div()
+        .text_size(px(16.0))
+        .text_color(rgb(0xffe56a))
+        .min_h(px(20.0))
+        .child("…")
+        .with_animation("desk-ellipsis-breath", breath_animation(), |el, value| {
+            el.opacity(0.55 + 0.45 * value)
+        })
+        .into_any_element()
+}
+
 pub(crate) fn drafting_mark(secs: u64) -> gpui_kit::AnyElement {
     div()
         .text_size(px(28.0))

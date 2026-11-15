@@ -71,7 +71,6 @@ impl TrendsDesk {
         } else {
             self.action_note.clone()
         };
-        let count = termy_x::trends_desk::char_count(&shown);
         let mut box_el = div()
             .id("desk-inline-editor")
             .w_full()
@@ -134,10 +133,7 @@ impl TrendsDesk {
                     )
                     .child(crate::xl_mark::reply_surface(&shown, &caret))
                     .children((!drafting).then(|| {
-                        div()
-                            .text_size(px(11.0))
-                            .text_color(rgb(0xc7c7cc))
-                            .child(format!("{count} characters"))
+                        crate::xl_mark::breathing_ellipsis()
                     }))
                     .on_mouse_down(
                         MouseButton::Left,

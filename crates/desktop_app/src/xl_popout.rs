@@ -4,9 +4,9 @@
 //! Copy copies it. Send is the only control that posts. Esc and Close keep the text.
 
 use gpui_kit::{
-    Animation, AnimationExt, AppContext, Context, InteractiveElement, IntoElement, MouseButton,
-    MouseDownEvent, MouseMoveEvent, ParentElement, SharedString, StatefulInteractiveElement,
-    Styled, canvas, div, px, rgb,
+    AppContext, Context, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
+    MouseMoveEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled, canvas, div,
+    px, rgb,
 };
 use termy_x::io::Http;
 
@@ -28,15 +28,16 @@ impl TrendsDesk {
             return None;
         }
         let generating = self.take_generating;
-        let shown = if self.take_generating && self.reply_edit.is_none() && self.stream_take.is_empty() {
-            format!("… {}", self.elapsed_secs())
-        } else if self.take_generating && self.reply_edit.is_none() {
+        let draft_text = self
+            .reply_edit
+            .as_ref()
+            .map(|editor| editor.text.clone())
+            .unwrap_or_else(|| pop.draft.clone());
+        let waiting = termy_x::trends_desk::reply_needs_a_take(&draft_text);
+        let shown = if generating && waiting && !self.stream_take.is_empty() {
             self.stream_take.clone()
         } else {
-            self.reply_edit
-                .as_ref()
-                .map(|editor| editor.text.clone())
-                .unwrap_or_else(|| pop.draft.clone())
+            draft_text
         };
         let drafting = pop.draft == termy_x::trends_desk::DRAFTING_PLACEHOLDER;
         let caret = self
@@ -116,12 +117,18 @@ impl TrendsDesk {
                         .size_full(),
                     )
                     .child(crate::xl_mark::reply_surface(&shown, &caret))
-                    .children((!drafting).then(|| {
-                        crate::xl_mark::breathing_ellipsis()
+                    .children((!drafting || generating).then(|| {
+                        let count = termy_x::trends_desk::char_count(&shown);
+                        div()
+                            .text_size(px(11.0))
+                            .text_color(rgb(0xc7c7cc))
+                            .child(format!("{count} characters"))
                     }))
                     .on_mouse_down(
                         MouseButton::Left,
-                        cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                        cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                            this.agent_input = false;
+                            this.focus_root_after_click(window, cx);
                             this.place_reply_cursor(
                                 event.position.x.into(),
                                 event.position.y.into(),
@@ -346,9 +353,22 @@ impl TrendsDesk {
 
     fn place_reply_cursor(&mut self, x: f32, y: f32, extend: bool) {
         let mut editor = match self.reply_edit.clone() {
-            Some(e) => e,
-            None => {
-                let text = self.popout.as_ref().map(|p| p.draft.clone()).unwrap_or_default();
+            Some(e) if !termy_x::trends_desk::reply_needs_a_take(&e.text) => e,
+            _ => {
+                let text = if !self.stream_take.is_empty() {
+                    self.stream_take.clone()
+                } else if self
+                    .popout
+                    .as_ref()
+                    .is_some_and(|p| !termy_x::trends_desk::reply_needs_a_take(&p.draft))
+                {
+                    self.popout
+                        .as_ref()
+                        .map(|p| p.draft.clone())
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
                 termy_x::draft_edit::ReplyEditor::new(&text)
             }
         };
@@ -366,6 +386,7 @@ impl TrendsDesk {
     }
 
     pub(crate) fn show_inline_editor(&mut self, id: &str, text: &str) {
+        self.agent_input = false;
         let provider = termy_x::trends_desk::TakeProvider::parse(&self.settings.take_provider);
         let tone = panel_tone_name(TakeTone::parse(&self.pack.tone)).to_string();
         let stored = self
@@ -404,6 +425,19 @@ impl TrendsDesk {
         use termy_x::draft_edit::Motion;
         let mods = &event.keystroke.modifiers;
         let command = mods.control || mods.platform;
+        if self
+            .reply_edit
+            .as_ref()
+            .is_none_or(|editor| termy_x::trends_desk::reply_needs_a_take(&editor.text))
+        {
+            let text = self
+                .popout
+                .as_ref()
+                .map(|pop| pop.draft.clone())
+                .filter(|draft| !termy_x::trends_desk::reply_needs_a_take(draft))
+                .unwrap_or_default();
+            self.reply_edit = Some(termy_x::draft_edit::ReplyEditor::new(&text));
+        }
         let Some(mut editor) = self.reply_edit.clone() else {
             return;
         };
@@ -871,11 +905,23 @@ impl TrendsDesk {
             &self.data_root,
             &termy_x::trends_desk::take_log_line(result.source, &status),
         );
-        let next = termy_x::trends_desk::text_after_take(
-            termy_x::trends_desk::DRAFTING_PLACEHOLDER,
-            &result.text,
-            &result.note,
-        );
+        let waiting = self
+            .reply_edit
+            .as_ref()
+            .map(|editor| editor.text.clone())
+            .or_else(|| {
+                self.popout
+                    .as_ref()
+                    .filter(|pop| pop.card_id == id)
+                    .map(|pop| pop.draft.clone())
+            })
+            .unwrap_or_else(|| termy_x::trends_desk::DRAFTING_PLACEHOLDER.to_string());
+        let waiting = if waiting == self.stream_take {
+            termy_x::trends_desk::DRAFTING_PLACEHOLDER.to_string()
+        } else {
+            waiting
+        };
+        let next = termy_x::trends_desk::text_after_take(&waiting, &result.text, &result.note);
         let cleared =
             termy_x::trends_desk::take_cleared_grok_model().filter(|_| result.source == "grok");
         if cleared.is_some() && self.settings.take_provider.starts_with("grok:") {
@@ -940,9 +986,6 @@ impl TrendsDesk {
         self.selected = Some(format!("take:{id}"));
     }
 
-
-
-
     pub(crate) fn request_another_take(&mut self, cx: &mut Context<Self>) {
         if self.take_generating {
             return;
@@ -981,12 +1024,12 @@ impl TrendsDesk {
         self.spawn_one_take(id, false, cx);
     }
 
+    #[allow(dead_code)]
     fn elapsed_secs(&self) -> u64 {
         self.take_started
             .map(|start| start.elapsed().as_secs())
             .unwrap_or(0)
     }
-
 
     fn failure_banner(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         let text = self.take_banner.clone();

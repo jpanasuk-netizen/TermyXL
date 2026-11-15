@@ -186,7 +186,9 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::trends_desk::domain::{Topic, outcome_error, outcome_from_posts};
+    use crate::trends_desk::domain::{
+        Topic, default_search_source, default_sort, outcome_error, outcome_from_posts,
+    };
     use serde_json::json;
 
     fn sample_outcome() -> RunOutcome {

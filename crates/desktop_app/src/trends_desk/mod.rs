@@ -16,16 +16,14 @@ use termy_x::trends_desk::{
     InspectedPost, Nav, OpenCliDesk, OutcomeKind, Phase, ReplyPhase, RunOutcome, SessionState,
     SessionStatus, Surface, TakeProvider, Topic, VISIBLE_NAME, close_editor,
     column_count_for_width, column_from_cache, column_from_outcome, column_loading_keep, daily_due,
-    drafts_file, edit_reply, editor_send, filter_posts, frame_from_parts,
-    isolated_opencli_config, open_editor, prepare_draft_file, surface_after_nav,
-    termy_xl_data_root, within_termy_x_config,
+    drafts_file, edit_reply, editor_send, filter_posts, frame_from_parts, isolated_opencli_config,
+    open_editor, prepare_draft_file, surface_after_nav, termy_xl_data_root, within_termy_x_config,
 };
 
 pub(crate) mod design;
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct DeskOptions {
-}
+pub struct DeskOptions {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Field {
@@ -413,9 +411,7 @@ impl TrendsDesk {
     }
 
     fn maybe_daily(&mut self, cx: &mut Context<Self>) {
-        if self.busy
-            || !daily_due(termy_x::time::unix_now(), &self.settings)
-        {
+        if self.busy || !daily_due(termy_x::time::unix_now(), &self.settings) {
             return;
         }
         let (date, _, _) = termy_x::trends_desk::chicago_stamp(termy_x::time::unix_now());
@@ -452,13 +448,23 @@ impl TrendsDesk {
                     .map(|report| report.posts.clone())
                     .unwrap_or_default()
             };
-            let source_label = if column.topic.search_source == "treg" { "Treg" } else { "OpenCLI" };
-            let sort_label = if column.topic.sort == "popular" { "Top" } else { "Newest" };
+            let source_label = if column.topic.search_source == "treg" {
+                "Treg"
+            } else {
+                "OpenCLI"
+            };
+            let sort_label = if column.topic.sort == "popular" {
+                "Top"
+            } else {
+                "Newest"
+            };
             let posts_cached = !kept.is_empty();
             column.view = termy_x::trends_desk::ColumnView {
                 phase: termy_x::trends_desk::Phase::Loading,
                 banner: if posts_cached {
-                    format!("Refreshing \"{query}\" · {source_label} · {sort_label}. Cards below are saved.")
+                    format!(
+                        "Refreshing \"{query}\" · {source_label} · {sort_label}. Cards below are saved."
+                    )
                 } else {
                     format!("Loading \"{query}\" · {source_label} · {sort_label}.")
                 },
@@ -651,7 +657,7 @@ impl TrendsDesk {
     }
 
     fn popout_key(&mut self, key: &str, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        if self.agent_input {
+        if self.agent_input && !self.popout.as_ref().is_some_and(|pop| pop.open) {
             if key == "escape" {
                 self.agent_input = false;
                 cx.notify();
@@ -734,6 +740,7 @@ impl TrendsDesk {
     }
 
     pub(crate) fn open_popout(&mut self, id: &str) {
+        self.agent_input = false;
         let text = self
             .card_replies
             .get(id)
@@ -764,6 +771,7 @@ impl TrendsDesk {
         let Some(pop) = self.popout.take() else {
             return;
         };
+        self.reply_edit = None;
         let closed = close_editor(&pop);
         self.card_replies.insert(
             pop.card_id.clone(),

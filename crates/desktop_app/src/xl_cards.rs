@@ -343,7 +343,8 @@ impl TrendsDesk {
                         SharedString::from(format!("desk-reply-{id}")),
                         "Reply",
                         false,
-                        cx.listener(move |this, _, _, cx| {
+                        cx.listener(move |this, _, window, cx| {
+                            this.focus_root_after_click(window, cx);
                             this.draft_take_for(edit_id.clone(), cx);
                             cx.stop_propagation();
                             cx.notify();
@@ -434,7 +435,8 @@ impl TrendsDesk {
                         SharedString::from(format!("desk-quote-{id}")),
                         "Quote",
                         false,
-                        cx.listener(move |this, _, _, cx| {
+                        cx.listener(move |this, _, window, cx| {
+                            this.focus_root_after_click(window, cx);
                             this.open_quote(&quote_id, cx);
                             cx.stop_propagation();
                             cx.notify();
@@ -444,7 +446,8 @@ impl TrendsDesk {
                         SharedString::from(format!("desk-edit-{id}")),
                         "Edit",
                         false,
-                        cx.listener(move |this, _, _, cx| {
+                        cx.listener(move |this, _, window, cx| {
+                            this.focus_root_after_click(window, cx);
                             this.draft_take_for(send_id.clone(), cx);
                             cx.stop_propagation();
                             cx.notify();

@@ -473,7 +473,7 @@ pub(crate) fn open_terminal_window_with_placement(
         move |window, cx| {
             #[cfg(target_os = "linux")]
             {
-                window.set_window_title("Termy");
+                window.set_window_title("Termy XL");
             }
             // Before the view exists, so its DWM theming finds the handle.
             #[cfg(target_os = "windows")]
@@ -761,6 +761,10 @@ fn main() {
         // missing key is not a failure.
         let _ = crate::native_sdk::unregister_open_tab_here();
         std::process::exit(0);
+    }
+    if cli_args.iter().any(|arg| arg == "--trends-desk") {
+        termy::trends_desk::run_standalone();
+        return;
     }
     if cli_args
         .first()

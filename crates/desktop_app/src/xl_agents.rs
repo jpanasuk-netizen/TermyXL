@@ -15,10 +15,10 @@ use termy_x::io::Http;
 use crate::trends_desk::TrendsDesk;
 use termy_x::agents::Agent;
 use termy_x::trends_desk::{
-    AgentPane, HermesAuth, Launch, PromptCli, TakeProvider, choose_hermes_key, execute_draft,
-    hermes_auth, hermes_models_line, hermes_models_request, known_hermes_exe, plan_agent_draft,
-    redact_secret, reply_prompt, resolve_launch, seed_agent_block, variants_from_draft,
-    write_hermes_settings, default_search_source, default_sort,
+    AgentPane, HermesAuth, Launch, PromptCli, TakeProvider, choose_hermes_key,
+    default_search_source, default_sort, execute_draft, hermes_auth, hermes_models_line,
+    hermes_models_request, known_hermes_exe, plan_agent_draft, redact_secret, reply_prompt,
+    resolve_launch, seed_agent_block, variants_from_draft, write_hermes_settings,
 };
 
 pub(crate) struct AgentProc {

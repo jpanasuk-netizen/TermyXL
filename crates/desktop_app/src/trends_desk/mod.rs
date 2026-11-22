@@ -472,7 +472,7 @@ impl TrendsDesk {
                 },
                 posts: kept,
                 posts_cached,
-                query: query.to_string(),
+                query: query.clone(),
             };
             topics.push(column.topic.clone());
         }

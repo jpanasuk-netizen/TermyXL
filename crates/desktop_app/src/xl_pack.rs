@@ -458,8 +458,16 @@ impl TrendsDesk {
                 .map(|post| post.id.clone())
                 .collect::<Vec<_>>(),
         );
-        let source_icon = if column.topic.search_source == "treg" { "Treg" } else { "OpenCLI" };
-        let sort_icon = if column.topic.sort == "popular" { "Top" } else { "Newest" };
+        let source_icon = if column.topic.search_source == "treg" {
+            "Treg"
+        } else {
+            "OpenCLI"
+        };
+        let sort_icon = if column.topic.sort == "popular" {
+            "Top"
+        } else {
+            "Newest"
+        };
         let label = format!(
             "{} · {} · {} · {} new",
             page_label(index, self.columns.len(), &column.topic.name),
@@ -574,7 +582,13 @@ impl TrendsDesk {
                         }
                         list
                     })
-                    .child(page_bar(label, index, &column.topic.sort, &column.topic.search_source, cx)),
+                    .child(page_bar(
+                        label,
+                        index,
+                        &column.topic.sort,
+                        &column.topic.search_source,
+                        cx,
+                    )),
             );
         let mut rows: Vec<gpui_kit::AnyElement> = vec![page.into_any_element()];
         if self.session.state == SessionState::Missing {
@@ -599,9 +613,21 @@ impl TrendsDesk {
     }
 }
 
-fn sort_toggle(column_index: usize, current_sort: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
-    let next_sort = if current_sort == "popular" { "newest" } else { "popular" };
-    let label = if current_sort == "popular" { "Top" } else { "Newest" };
+fn sort_toggle(
+    column_index: usize,
+    current_sort: &str,
+    cx: &mut Context<TrendsDesk>,
+) -> gpui_kit::AnyElement {
+    let next_sort = if current_sort == "popular" {
+        "newest"
+    } else {
+        "popular"
+    };
+    let label = if current_sort == "popular" {
+        "Top"
+    } else {
+        "Newest"
+    };
     button(
         format!("desk-sort-toggle-{column_index}"),
         label,
@@ -609,17 +635,28 @@ fn sort_toggle(column_index: usize, current_sort: &str, cx: &mut Context<TrendsD
         cx.listener(move |this, _, _, cx| {
             if let Some(column) = this.columns.get_mut(column_index) {
                 column.topic.sort = next_sort.into();
-                let query = termy_x::trends_desk::search_query(&column.topic.desc, &this.settings.focus);
+                let query =
+                    termy_x::trends_desk::search_query(&column.topic.desc, &this.settings.focus);
                 let kept = column.view.posts.clone();
-                let source_label = if column.topic.search_source == "treg" { "Treg" } else { "OpenCLI" };
-                let sort_label = if column.topic.sort == "popular" { "Top" } else { "Newest" };
+                let source_label = if column.topic.search_source == "treg" {
+                    "Treg"
+                } else {
+                    "OpenCLI"
+                };
+                let sort_label = if column.topic.sort == "popular" {
+                    "Top"
+                } else {
+                    "Newest"
+                };
                 let topic_id = column.topic.id.clone();
                 column.view = termy_x::trends_desk::ColumnView {
                     phase: termy_x::trends_desk::Phase::Loading,
-                    banner: format!("Refreshing {query} · {source_label} · {sort_label}. Cards below are saved."),
+                    banner: format!(
+                        "Refreshing {query} · {source_label} · {sort_label}. Cards below are saved."
+                    ),
                     posts: kept,
                     posts_cached: true,
-                    query: query.to_string(),
+                    query: query.clone(),
                 };
                 this.start_run(std::slice::from_ref(&topic_id), cx);
             }
@@ -629,9 +666,21 @@ fn sort_toggle(column_index: usize, current_sort: &str, cx: &mut Context<TrendsD
     )
 }
 
-fn source_toggle(column_index: usize, current_source: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
-    let next_source = if current_source == "treg" { "opencli" } else { "treg" };
-    let label = if current_source == "treg" { "Switch to OpenCLI" } else { "Switch to Treg" };
+fn source_toggle(
+    column_index: usize,
+    current_source: &str,
+    cx: &mut Context<TrendsDesk>,
+) -> gpui_kit::AnyElement {
+    let next_source = if current_source == "treg" {
+        "opencli"
+    } else {
+        "treg"
+    };
+    let label = if current_source == "treg" {
+        "Switch to OpenCLI"
+    } else {
+        "Switch to Treg"
+    };
     button(
         format!("desk-source-toggle-{column_index}"),
         label,
@@ -647,7 +696,13 @@ fn source_toggle(column_index: usize, current_source: &str, cx: &mut Context<Tre
     )
 }
 
-fn page_bar(label: String, col_idx: usize, sort: &str, source: &str, cx: &mut Context<TrendsDesk>) -> gpui_kit::AnyElement {
+fn page_bar(
+    label: String,
+    col_idx: usize,
+    sort: &str,
+    source: &str,
+    cx: &mut Context<TrendsDesk>,
+) -> gpui_kit::AnyElement {
     // Painted last so a search result list cannot cover Next.
     debug_assert!(termy_x::trends_desk::next_click_reaches(
         true,

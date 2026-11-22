@@ -1,12 +1,13 @@
 //! Header, navigation, and settings for the Termy XL window.
 
 use gpui_kit::{
-    App, AppContext, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
-    ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb,
+    App, AppContext, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window,
+    div, px, rgb,
 };
 
-use super::{Field, Surface, TrendsDesk};
 use super::design::*;
+use super::{Field, Surface, TrendsDesk};
 use termy_x::trends_desk::{
     GPU_NOTE, IMAGE_QUOTE_NOTE, Nav, TakeProvider, VISIBLE_NAME, turn_page,
 };
@@ -644,7 +645,6 @@ impl TrendsDesk {
     }
 
     pub(crate) fn settings_view(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
-        let provider = termy_x::trends_desk::provider_label(&self.settings.take_provider);
         div()
             .flex()
             .flex_col()
@@ -875,10 +875,22 @@ pub(crate) fn button(
         .py(px(8.0))
         .rounded(px(8.0))
         .border_1()
-        .border_color(if active { rgb(AC_PINK) } else { rgb(BD_DEFAULT) })
-        .bg(if active { rgb(BG_ACTIVE) } else { rgb(BG_BUTTON) })
+        .border_color(if active {
+            rgb(AC_PINK)
+        } else {
+            rgb(BD_DEFAULT)
+        })
+        .bg(if active {
+            rgb(BG_ACTIVE)
+        } else {
+            rgb(BG_BUTTON)
+        })
         .text_size(px(13.0))
-        .text_color(if active { rgb(AC_CYAN) } else { rgb(TX_PRIMARY) })
+        .text_color(if active {
+            rgb(AC_CYAN)
+        } else {
+            rgb(TX_PRIMARY)
+        })
         .cursor_pointer()
         .hover(|style| {
             style

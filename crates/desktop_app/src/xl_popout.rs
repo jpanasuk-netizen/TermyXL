@@ -7,8 +7,8 @@
 
 use gpui_kit::{
     AppContext, Context, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled, div,
-    px, rgb,
+    MouseMoveEvent, MouseUpEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled,
+    div, px, rgb,
 };
 use termy_x::io::Http;
 
@@ -965,7 +965,9 @@ impl TrendsDesk {
         let typed = self
             .reply_edit
             .as_ref()
-            .filter(|editor| editor.text == next && !termy_x::trends_desk::reply_needs_a_take(&editor.text))
+            .filter(|editor| {
+                editor.text == next && !termy_x::trends_desk::reply_needs_a_take(&editor.text)
+            })
             .cloned();
         if let Some(editor) = typed {
             // The user typed while the take was drafting: keep their text,
@@ -1430,4 +1432,3 @@ impl TrendsDesk {
         cx.notify();
     }
 }
-

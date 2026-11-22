@@ -75,6 +75,6 @@ pub const PAD_LG: f32 = 16.0;
 pub const BTN_MIN_H: f32 = 36.0;
 
 // ─── Animation / Timing ────────────────────────────────────────────────────
-pub const DUR_FAST: u64 = 100;   // hover states
+pub const DUR_FAST: u64 = 100; // hover states
 pub const DUR_BASE: u64 = 150; // transitions
-pub const DUR_SLOW: u64 = 250;   // panel opens
+pub const DUR_SLOW: u64 = 250; // panel opens

@@ -1524,9 +1524,15 @@ mod tests {
     fn pink_post_button_tracks_the_box_and_the_send() {
         let editing = |t: &str| ReplyPhase::Editing { text: t.into() };
         let hidden = pink_post_button(DRAFTING_PLACEHOLDER, &editing(DRAFTING_PLACEHOLDER));
-        assert!(!hidden.visible && !hidden.enabled, "no button while Drafting…");
+        assert!(
+            !hidden.visible && !hidden.enabled,
+            "no button while Drafting…"
+        );
         let empty = pink_post_button("   ", &editing(""));
-        assert!(!empty.visible && !empty.enabled, "empty box: nothing to post");
+        assert!(
+            !empty.visible && !empty.enabled,
+            "empty box: nothing to post"
+        );
         let ready = pink_post_button("my edited take", &editing("my edited take"));
         assert!(ready.visible && ready.enabled);
         assert_eq!(ready.label, "Post");
@@ -1540,7 +1546,10 @@ mod tests {
                 receipt: "ok https://x.com/me/status/42".into(),
             },
         );
-        assert!(done.visible && !done.enabled, "no double post of the same text");
+        assert!(
+            done.visible && !done.enabled,
+            "no double post of the same text"
+        );
         assert_eq!(done.label, "Posted ✓");
         assert_eq!(done.note.as_deref(), Some("https://x.com/me/status/42"));
         let failed = pink_post_button(
@@ -1565,8 +1574,14 @@ mod tests {
 
     #[test]
     fn a_late_take_never_replaces_typed_text() {
-        assert_eq!(text_after_take("my own words", "generated", ""), "my own words");
-        assert_eq!(text_after_take(DRAFTING_PLACEHOLDER, " generated ", ""), "generated");
+        assert_eq!(
+            text_after_take("my own words", "generated", ""),
+            "my own words"
+        );
+        assert_eq!(
+            text_after_take(DRAFTING_PLACEHOLDER, " generated ", ""),
+            "generated"
+        );
         assert_eq!(text_after_take("", "generated", ""), "generated");
     }
 }

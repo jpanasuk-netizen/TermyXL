@@ -705,7 +705,11 @@ fn is_wrap_space(grapheme: &str) -> bool {
 /// and an empty text or a trailing newline yields an empty row.
 pub fn wrap_by_width(text: &str, widths: &[f32], max_w: f32) -> Vec<(usize, usize)> {
     let graphemes = grapheme_ranges(text);
-    let max_w = if max_w.is_finite() { max_w.max(1.0) } else { f32::MAX };
+    let max_w = if max_w.is_finite() {
+        max_w.max(1.0)
+    } else {
+        f32::MAX
+    };
     let width_at = |index: usize| widths.get(index).copied().unwrap_or(0.0).max(0.0);
     let mut out = Vec::new();
     let mut line_start = 0usize;
@@ -788,7 +792,11 @@ pub struct ReplyLayout {
 
 impl ReplyLayout {
     fn advance_or_default(&self) -> f32 {
-        if self.advance > 0.0 { self.advance } else { 8.0 }
+        if self.advance > 0.0 {
+            self.advance
+        } else {
+            8.0
+        }
     }
 
     fn line_h_or_default(&self) -> f32 {
@@ -923,7 +931,13 @@ impl ReplyEditor {
     }
 
     /// Click-to-place with one, two, or three clicks; shift extends.
-    pub fn click_index(&mut self, lines: &[(usize, usize)], index: usize, clicks: usize, extend: bool) {
+    pub fn click_index(
+        &mut self,
+        lines: &[(usize, usize)],
+        index: usize,
+        clicks: usize,
+        extend: bool,
+    ) {
         let index = index.min(self.text.len());
         if clicks >= 3 {
             self.caret.select_line_at(&self.text, lines, index);
@@ -1341,7 +1355,10 @@ mod tests {
     fn pink_box_wrap_keeps_newlines_emoji_and_empty_rows() {
         let text = format!("hi {FAMILY} there\n\nlast");
         let lines = wrap_uniform(&text, 100.0, 1.0);
-        assert_eq!(rows(&text, &lines), vec![&format!("hi {FAMILY} there")[..], "", "last"]);
+        assert_eq!(
+            rows(&text, &lines),
+            vec![&format!("hi {FAMILY} there")[..], "", "last"]
+        );
         assert_eq!(wrap_uniform("", 10.0, 1.0), vec![(0, 0)]);
         assert_eq!(wrap_uniform("ab\n", 10.0, 1.0), vec![(0, 2), (3, 3)]);
         assert_eq!(wrap_uniform("ab\r\ncd", 10.0, 1.0), vec![(0, 2), (4, 6)]);

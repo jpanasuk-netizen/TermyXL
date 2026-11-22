@@ -356,8 +356,12 @@ pub struct Topic {
     pub sort: String,
 }
 
-pub fn default_search_source() -> String { "opencli".into() }
-pub fn default_sort() -> String { "newest".into() }
+pub fn default_search_source() -> String {
+    "opencli".into()
+}
+pub fn default_sort() -> String {
+    "newest".into()
+}
 
 impl Topic {
     pub fn law() -> Self {

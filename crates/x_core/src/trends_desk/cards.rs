@@ -608,6 +608,51 @@ pub fn request_send(phase: &ReplyPhase, explicit: bool) -> Result<ReplyPhase, St
     Ok(ReplyPhase::Pending { text })
 }
 
+/// The bright cyan Post button inside the pink box.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinkPost {
+    /// Shown once a take or typed draft exists (or a send is in flight/done).
+    pub visible: bool,
+    /// Clickable. Never while posting, after a confirmed post of the same
+    /// text, or when the box holds nothing postable.
+    pub enabled: bool,
+    pub label: &'static str,
+    /// One short inline line under the text: the error, or the posted link.
+    pub note: Option<String>,
+}
+
+/// State of the in-box Post button for the box text and the card's phase.
+/// It only describes the button; posting still needs the explicit click.
+pub fn pink_post_button(text: &str, phase: &ReplyPhase) -> PinkPost {
+    let postable = !reply_is_status(text) && !text_to_post(text).is_empty();
+    match phase {
+        ReplyPhase::Pending { .. } => PinkPost {
+            visible: true,
+            enabled: false,
+            label: "Posting…",
+            note: None,
+        },
+        ReplyPhase::Confirmed { receipt, .. } => PinkPost {
+            visible: true,
+            enabled: false,
+            label: "Posted ✓",
+            note: super::pack::reply_link(receipt),
+        },
+        ReplyPhase::Failed { error, .. } => PinkPost {
+            visible: true,
+            enabled: postable,
+            label: "Retry post",
+            note: Some(error.clone()),
+        },
+        ReplyPhase::Idle | ReplyPhase::Editing { .. } => PinkPost {
+            visible: postable,
+            enabled: postable,
+            label: "Post",
+            note: None,
+        },
+    }
+}
+
 pub fn apply_send_result(pending: &ReplyPhase, result: Result<String, String>) -> ReplyPhase {
     let ReplyPhase::Pending { text } = pending else {
         return pending.clone();
@@ -1473,5 +1518,55 @@ mod tests {
         assert!(!request.url.contains("/status/"));
         assert!(request.headers.iter().any(|(key, _)| key == "X-Treg-Token"));
         assert!(!format!("{request:?}").contains("x.exe"));
+    }
+
+    #[test]
+    fn pink_post_button_tracks_the_box_and_the_send() {
+        let editing = |t: &str| ReplyPhase::Editing { text: t.into() };
+        let hidden = pink_post_button(DRAFTING_PLACEHOLDER, &editing(DRAFTING_PLACEHOLDER));
+        assert!(!hidden.visible && !hidden.enabled, "no button while Drafting…");
+        let empty = pink_post_button("   ", &editing(""));
+        assert!(!empty.visible && !empty.enabled, "empty box: nothing to post");
+        let ready = pink_post_button("my edited take", &editing("my edited take"));
+        assert!(ready.visible && ready.enabled);
+        assert_eq!(ready.label, "Post");
+        let posting = pink_post_button("my edited take", &ReplyPhase::Pending { text: "x".into() });
+        assert!(posting.visible && !posting.enabled);
+        assert_eq!(posting.label, "Posting…");
+        let done = pink_post_button(
+            "my edited take",
+            &ReplyPhase::Confirmed {
+                text: "x".into(),
+                receipt: "ok https://x.com/me/status/42".into(),
+            },
+        );
+        assert!(done.visible && !done.enabled, "no double post of the same text");
+        assert_eq!(done.label, "Posted ✓");
+        assert_eq!(done.note.as_deref(), Some("https://x.com/me/status/42"));
+        let failed = pink_post_button(
+            "my edited take",
+            &ReplyPhase::Failed {
+                text: "x".into(),
+                error: "OpenCLI said no".into(),
+            },
+        );
+        assert!(failed.visible && failed.enabled);
+        assert_eq!(failed.label, "Retry post");
+        assert_eq!(failed.note.as_deref(), Some("OpenCLI said no"));
+        let failed_empty = pink_post_button(
+            "",
+            &ReplyPhase::Failed {
+                text: "x".into(),
+                error: "e".into(),
+            },
+        );
+        assert!(!failed_empty.enabled, "retry needs text");
+    }
+
+    #[test]
+    fn a_late_take_never_replaces_typed_text() {
+        assert_eq!(text_after_take("my own words", "generated", ""), "my own words");
+        assert_eq!(text_after_take(DRAFTING_PLACEHOLDER, " generated ", ""), "generated");
+        assert_eq!(text_after_take("", "generated", ""), "generated");
     }
 }

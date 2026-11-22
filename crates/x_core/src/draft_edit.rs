@@ -691,6 +691,149 @@ pub fn uniform_stops(
     stops
 }
 
+fn is_wrap_space(grapheme: &str) -> bool {
+    grapheme == " " || grapheme == "\t"
+}
+
+/// Soft-wrap `text` so no visual line is wider than `max_w`.
+///
+/// `widths` holds one advance per grapheme of `text`, in the order of
+/// [`grapheme_ranges`]; a missing entry counts as zero. Lines break at the
+/// last space that fits (the space itself is skipped, like
+/// `[(0, 5), (6, 11)]` for "hello world"); a word longer than the line is
+/// broken at the grapheme that would overflow. `\n` always starts a new row,
+/// and an empty text or a trailing newline yields an empty row.
+pub fn wrap_by_width(text: &str, widths: &[f32], max_w: f32) -> Vec<(usize, usize)> {
+    let graphemes = grapheme_ranges(text);
+    let max_w = if max_w.is_finite() { max_w.max(1.0) } else { f32::MAX };
+    let width_at = |index: usize| widths.get(index).copied().unwrap_or(0.0).max(0.0);
+    let mut out = Vec::new();
+    let mut line_start = 0usize;
+    let mut first = 0usize;
+    let mut x = 0.0_f32;
+    let mut last_space: Option<usize> = None;
+    let mut i = 0usize;
+    while i < graphemes.len() {
+        let (gs, ge) = graphemes[i];
+        let grapheme = &text[gs..ge];
+        if grapheme.ends_with('\n') {
+            let end = if grapheme == "\r\n" { gs } else { ge - 1 };
+            out.push((line_start, end));
+            line_start = ge;
+            first = i + 1;
+            x = 0.0;
+            last_space = None;
+            i += 1;
+            continue;
+        }
+        let w = width_at(i);
+        if x + w > max_w && i > first {
+            if is_wrap_space(grapheme) {
+                out.push((line_start, gs));
+                line_start = ge;
+                first = i + 1;
+                x = 0.0;
+                last_space = None;
+                i += 1;
+                continue;
+            }
+            if let Some(space) = last_space {
+                let (ss, se) = graphemes[space];
+                out.push((line_start, ss));
+                line_start = se;
+                first = space + 1;
+                x = (first..i).map(width_at).sum();
+                last_space = None;
+                continue;
+            }
+            out.push((line_start, gs));
+            line_start = gs;
+            first = i;
+            x = 0.0;
+            last_space = None;
+            continue;
+        }
+        if is_wrap_space(grapheme) && i > first {
+            last_space = Some(i);
+        }
+        x += w;
+        i += 1;
+    }
+    out.push((line_start, text.len()));
+    out
+}
+
+/// [`wrap_by_width`] with the same advance for every grapheme.
+pub fn wrap_uniform(text: &str, max_w: f32, advance: f32) -> Vec<(usize, usize)> {
+    let count = text.graphemes(true).count();
+    wrap_by_width(text, &vec![advance.max(0.0); count], max_w)
+}
+
+/// What the pink reply box last painted: its soft-wrap rows and the shaped
+/// glyph stops, in window coordinates. Keys and clicks use it so the caret
+/// moves over the rows the user actually sees. When the text changed since
+/// the last paint, rows are re-derived from the remembered width and the
+/// average advance, so nothing ever slices a stale range.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ReplyLayout {
+    pub text: String,
+    pub lines: Vec<(usize, usize)>,
+    pub painted: Vec<PaintedLine>,
+    pub max_w: f32,
+    pub advance: f32,
+    pub origin_x: f32,
+    pub origin_y: f32,
+    pub line_h: f32,
+}
+
+impl ReplyLayout {
+    fn advance_or_default(&self) -> f32 {
+        if self.advance > 0.0 { self.advance } else { 8.0 }
+    }
+
+    fn line_h_or_default(&self) -> f32 {
+        if self.line_h > 0.0 { self.line_h } else { 22.0 }
+    }
+
+    pub fn lines_for(&self, text: &str) -> Vec<(usize, usize)> {
+        if self.text == text && !self.lines.is_empty() {
+            return self.lines.clone();
+        }
+        if self.max_w > 0.0 {
+            wrap_uniform(text, self.max_w, self.advance_or_default())
+        } else {
+            hard_lines(text)
+        }
+    }
+
+    /// Byte offset under a window-space point.
+    pub fn hit(&self, text: &str, x: f32, y: f32) -> usize {
+        if text.is_empty() {
+            return 0;
+        }
+        if self.text == text && !self.painted.is_empty() {
+            return hit_test(&self.painted, x, y).min(text.len());
+        }
+        let lines = self.lines_for(text);
+        hit_test_uniform(
+            text,
+            &lines,
+            self.origin_x,
+            self.origin_y,
+            x,
+            y,
+            self.line_h_or_default(),
+            self.advance_or_default(),
+        )
+        .min(text.len())
+    }
+
+    /// Rows the box needs for `text`, at least one.
+    pub fn rows_for(&self, text: &str) -> usize {
+        self.lines_for(text).len().max(1)
+    }
+}
+
 /// The pink-box reply. Undo, selection, and a live character count.
 #[derive(Clone, Debug)]
 pub struct ReplyEditor {
@@ -764,6 +907,40 @@ impl ReplyEditor {
         self.caret.select_all(&self.text);
     }
 
+    /// Arrow, Home/End, and word motion over caller-supplied visual rows
+    /// (the pink box passes its soft-wrap rows).
+    pub fn move_in(&mut self, lines: &[(usize, usize)], motion: Motion, extend: bool) {
+        self.caret.move_by(&self.text, lines, motion, extend);
+    }
+
+    pub fn delete_word_backward(&mut self) {
+        self.remember();
+        let before = self.text.clone();
+        self.caret.delete_word_backward(&mut self.text);
+        if self.text == before {
+            self.undo.pop();
+        }
+    }
+
+    /// Click-to-place with one, two, or three clicks; shift extends.
+    pub fn click_index(&mut self, lines: &[(usize, usize)], index: usize, clicks: usize, extend: bool) {
+        let index = index.min(self.text.len());
+        if clicks >= 3 {
+            self.caret.select_line_at(&self.text, lines, index);
+        } else if clicks == 2 {
+            self.caret.select_word_at(&self.text, index);
+        } else if extend {
+            self.caret.place(&self.text, index, true);
+        } else {
+            self.caret.drag_anchor(&self.text, index);
+        }
+    }
+
+    pub fn drag_index(&mut self, index: usize) {
+        let index = index.min(self.text.len());
+        self.caret.drag_to(&self.text, index);
+    }
+
     pub fn selected(&self) -> String {
         self.caret
             .selected_text(&self.text)
@@ -794,7 +971,8 @@ impl ReplyEditor {
     }
 
     pub fn paste(&mut self, clip: &str) {
-        self.insert(clip);
+        let clip = clip.replace("\r\n", "\n").replace('\r', "\n");
+        self.insert(&clip);
     }
 
     pub fn undo(&mut self) -> bool {
@@ -1126,5 +1304,149 @@ mod tests {
         assert!(editor.undo());
         editor.click_at(0.0, 0.0, 0.0, 0.0, 320.0);
         assert!(editor.selected().is_empty());
+    }
+
+    fn rows<'a>(text: &'a str, lines: &[(usize, usize)]) -> Vec<&'a str> {
+        lines.iter().map(|&(a, b)| &text[a..b]).collect()
+    }
+
+    #[test]
+    fn pink_box_wraps_at_word_boundaries_and_skips_the_break_space() {
+        let text = "the quick brown fox jumps";
+        // 10 columns of 1px each.
+        let lines = wrap_uniform(text, 10.0, 1.0);
+        assert_eq!(rows(text, &lines), vec!["the quick", "brown fox", "jumps"]);
+        assert_eq!(lines[0], (0, 9));
+        assert_eq!(lines[1].0, 10, "the space at byte 9 is skipped");
+        for &(a, b) in &lines {
+            assert!(text[a..b].chars().count() <= 10, "no row overflows");
+        }
+    }
+
+    #[test]
+    fn pink_box_breaks_a_word_longer_than_the_line() {
+        let text = "aaaaaaaaaaaaaaaaaaaaaaaaa end";
+        let lines = wrap_uniform(text, 10.0, 1.0);
+        assert_eq!(
+            rows(text, &lines),
+            vec!["aaaaaaaaaa", "aaaaaaaaaa", "aaaaa end"]
+        );
+        let url = "https://example.com/a/very/long/path/that/never/has/a/space";
+        for &(a, b) in &wrap_uniform(url, 12.0, 1.0) {
+            assert!(b - a <= 12);
+        }
+    }
+
+    #[test]
+    fn pink_box_wrap_keeps_newlines_emoji_and_empty_rows() {
+        let text = format!("hi {FAMILY} there\n\nlast");
+        let lines = wrap_uniform(&text, 100.0, 1.0);
+        assert_eq!(rows(&text, &lines), vec![&format!("hi {FAMILY} there")[..], "", "last"]);
+        assert_eq!(wrap_uniform("", 10.0, 1.0), vec![(0, 0)]);
+        assert_eq!(wrap_uniform("ab\n", 10.0, 1.0), vec![(0, 2), (3, 3)]);
+        assert_eq!(wrap_uniform("ab\r\ncd", 10.0, 1.0), vec![(0, 2), (4, 6)]);
+        // Wide graphemes count by their measured width, never split.
+        let wide = format!("{FAMILY}{FAMILY}{FAMILY}");
+        let widths = vec![4.0; 3];
+        let lines = wrap_by_width(&wide, &widths, 9.0);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], (0, FAMILY.len() * 2));
+    }
+
+    #[test]
+    fn pink_box_wrap_uses_real_widths_not_character_counts() {
+        // "WWW iii": W is 3px, i and space 1px; 10px fits "WWW " but not "i".
+        let text = "WWW iii";
+        let widths: Vec<f32> = text
+            .chars()
+            .map(|c| match c {
+                'W' => 3.0,
+                _ => 1.0,
+            })
+            .collect();
+        let lines = wrap_by_width(text, &widths, 10.0);
+        assert_eq!(rows(text, &lines), vec!["WWW", "iii"]);
+    }
+
+    #[test]
+    fn caret_moves_up_down_home_end_across_soft_wrapped_rows() {
+        let mut editor = ReplyEditor::new("the quick brown fox jumps");
+        let lines = wrap_uniform(&editor.text, 10.0, 1.0);
+        // caret at end ("jumps" row, col 5)
+        editor.move_in(&lines, Motion::Up, false);
+        assert_eq!(editor.caret.caret, 15, "col 5 on 'brown fox'");
+        editor.move_in(&lines, Motion::Up, false);
+        assert_eq!(editor.caret.caret, 5, "col 5 on 'the quick'");
+        editor.move_in(&lines, Motion::End, false);
+        assert_eq!(editor.caret.caret, 9);
+        editor.move_in(&lines, Motion::Down, false);
+        assert_eq!(editor.caret.caret, 19, "end of 'brown fox'");
+        editor.move_in(&lines, Motion::Home, false);
+        assert_eq!(editor.caret.caret, 10);
+        editor.move_in(&lines, Motion::Down, true);
+        assert_eq!(editor.selected(), "brown fox ");
+        editor.move_in(&lines, Motion::Down, true);
+        assert_eq!(editor.caret.caret, 20, "down on the last row stays put");
+        editor.move_in(&lines, Motion::DocStart, false);
+        assert_eq!(editor.caret.caret, 0);
+        editor.move_in(&lines, Motion::WordRight, false);
+        assert!(editor.caret.caret > 0);
+    }
+
+    #[test]
+    fn pink_box_click_double_click_and_drag_select_on_wrapped_rows() {
+        let text = "the quick brown fox jumps";
+        let lines = wrap_uniform(text, 10.0, 1.0);
+        let layout = ReplyLayout {
+            text: String::new(),
+            lines: Vec::new(),
+            painted: Vec::new(),
+            max_w: 100.0,
+            advance: 10.0,
+            origin_x: 0.0,
+            origin_y: 0.0,
+            line_h: 20.0,
+        };
+        // Text differs from the cached paint: rows come from width/advance.
+        assert_eq!(layout.lines_for(text), lines);
+        assert_eq!(layout.rows_for(text), 3);
+        // Second row, x=30 → after "bro" (byte 13).
+        let at = layout.hit(text, 30.0, 25.0);
+        assert_eq!(at, 13);
+        let mut editor = ReplyEditor::new(text);
+        editor.click_index(&lines, at, 1, false);
+        assert!(editor.selected().is_empty());
+        assert_eq!(editor.caret.caret, 13);
+        editor.drag_index(layout.hit(text, 0.0, 45.0));
+        assert_eq!(editor.selected(), "wn fox ");
+        editor.click_index(&lines, at, 2, false);
+        assert_eq!(editor.selected(), "brown");
+        editor.click_index(&lines, at, 3, false);
+        assert_eq!(editor.selected(), "brown fox");
+        // Below the last row lands on the last row, never past the text.
+        assert!(layout.hit(text, 999.0, 999.0) <= text.len());
+        // A painted layout for the same text wins over the estimate.
+        let painted = ReplyLayout {
+            text: text.to_string(),
+            lines: lines.clone(),
+            painted: vec![PaintedLine {
+                top: 0.0,
+                bottom: 20.0,
+                stops: vec![(0, 0.0), (1, 7.0), (2, 14.0)],
+            }],
+            ..layout.clone()
+        };
+        assert_eq!(painted.hit(text, 13.0, 5.0), 2);
+    }
+
+    #[test]
+    fn paste_normalizes_carriage_returns_and_word_delete_undoes() {
+        let mut editor = ReplyEditor::new("");
+        editor.paste("one\r\ntwo\rthree");
+        assert_eq!(editor.text, "one\ntwo\nthree");
+        editor.delete_word_backward();
+        assert_eq!(editor.text, "one\ntwo\n");
+        assert!(editor.undo());
+        assert_eq!(editor.text, "one\ntwo\nthree");
     }
 }

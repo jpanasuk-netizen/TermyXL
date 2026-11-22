@@ -1,11 +1,13 @@
 //! Pink draft box inside a Termy XL gold card.
 //!
-//! Draft take opens it on the click. Funny, Smart, and Spicy swap the reply.
-//! Copy copies it. Send is the only control that posts. Esc and Close keep the text.
+//! Draft take opens it on the click; the take lands as wrapped, editable
+//! text. Funny, Smart, and Spicy swap the reply and Copy copies it. The
+//! bright cyan Post button at the bottom-right of the box is the only control
+//! that posts. Esc and Close keep the text.
 
 use gpui_kit::{
     AppContext, Context, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    MouseMoveEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled, canvas, div,
+    MouseMoveEvent, MouseUpEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled, div,
     px, rgb,
 };
 use termy_x::io::Http;
@@ -34,12 +36,14 @@ impl TrendsDesk {
             .map(|editor| editor.text.clone())
             .unwrap_or_else(|| pop.draft.clone());
         let waiting = termy_x::trends_desk::reply_needs_a_take(&draft_text);
-        let shown = if generating && waiting && !self.stream_take.is_empty() {
+        let streaming = generating && waiting && !self.stream_take.is_empty();
+        let shown = if streaming {
             self.stream_take.clone()
         } else {
-            draft_text
+            draft_text.clone()
         };
-        let drafting = pop.draft == termy_x::trends_desk::DRAFTING_PLACEHOLDER;
+        // Drafting…/streaming text is a status, not the editable reply.
+        let dim = streaming || waiting;
         let caret = self
             .reply_edit
             .as_ref()
@@ -50,114 +54,27 @@ impl TrendsDesk {
                 text: pop.draft.clone(),
             },
         );
-        let face = match &phase {
-            termy_x::trends_desk::ReplyPhase::Pending { .. } => {
-                termy_x::trends_desk::PostFace::Posting
-            }
-            termy_x::trends_desk::ReplyPhase::Confirmed { .. } => {
-                termy_x::trends_desk::PostFace::Posted
-            }
-            termy_x::trends_desk::ReplyPhase::Failed { .. } => {
-                termy_x::trends_desk::PostFace::Retry
-            }
-            _ => termy_x::trends_desk::PostFace::Ready,
-        };
-        let post_label = termy_x::trends_desk::post_button_text(face, handle);
+        let post = termy_x::trends_desk::pink_post_button(&draft_text, &phase);
         let posted_url = match &phase {
             termy_x::trends_desk::ReplyPhase::Confirmed { receipt, .. } => {
                 termy_x::trends_desk::reply_link(receipt)
             }
             _ => None,
         };
-        let failure = match &phase {
-            termy_x::trends_desk::ReplyPhase::Failed { error, .. } => Some(error.clone()),
-            _ => None,
-        };
-        let status = if let Some(error) = failure.clone() {
-            error
-        } else {
-            self.action_note.clone()
-        };
-        let mut box_el = div()
-            .id("desk-inline-editor")
-            .w_full()
-            .min_w(px(0.0))
-            .p(px(10.0))
-            .rounded(px(12.0))
-            .bg(rgb(termy_x::trends_desk::SELECT_PINK))
+        let status = self.action_note.clone();
+
+        // Quiet row: voice chips, provider, Copy.
+        let mut tools = div()
             .flex()
-            .flex_col()
-            .gap(px(8.0))
-            .child(self.provider_dropdown(cx))
-            .children((!self.take_banner.is_empty()).then(|| self.failure_banner(cx)))
-            .children((drafting || self.take_generating).then(|| self.cancel_row(cx)))
-            .child(
-                div()
-                    .id("desk-reply-editor")
-                    .relative()
-                    .min_h(px(96.0))
-                    .p(px(8.0))
-                    .rounded(px(8.0))
-                    .bg(rgb(0x2a1020))
-                    .text_size(px(14.0))
-                    .text_color(rgb(0xffe56a))
-                    .whitespace_normal()
-                    .child(
-                        canvas(
-                            |bounds, _, _| {
-                                remember_editor_box(
-                                    bounds.origin.x.into(),
-                                    bounds.origin.y.into(),
-                                    bounds.size.width.into(),
-                                );
-                            },
-                            |_, _, _, _| {},
-                        )
-                        .absolute()
-                        .size_full(),
-                    )
-                    .child(crate::xl_mark::reply_surface(&shown, &caret))
-                    .children((!drafting || generating).then(|| {
-                        let count = termy_x::trends_desk::char_count(&shown);
-                        div()
-                            .text_size(px(11.0))
-                            .text_color(rgb(0xc7c7cc))
-                            .child(format!("{count} characters"))
-                    }))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                            this.agent_input = false;
-                            this.focus_root_after_click(window, cx);
-                            this.place_reply_cursor(
-                                event.position.x.into(),
-                                event.position.y.into(),
-                                event.modifiers.shift,
-                            );
-                            this.reply_drag = !event.modifiers.shift;
-                            cx.stop_propagation();
-                            cx.notify();
-                        }),
-                    )
-                    .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
-                        if this.reply_drag && event.pressed_button == Some(MouseButton::Left) {
-                            this.place_reply_cursor(
-                                event.position.x.into(),
-                                event.position.y.into(),
-                                true,
-                            );
-                            cx.stop_propagation();
-                            cx.notify();
-                        }
-                    })),
-            );
-        let mut chips = div().flex().flex_wrap().gap(px(8.0));
+            .flex_wrap()
+            .items_center()
+            .gap(px(6.0))
+            .child(self.provider_dropdown(cx));
         for (index, tone) in panel_tones().into_iter().enumerate() {
-            chips = chips.child(variant_chip(panel_tone_name(tone), index, cx));
+            tools = tools.child(variant_chip(panel_tone_name(tone), index, cx));
         }
-        box_el = box_el.child(chips);
         if status.contains("Vyce direct") {
-            box_el = box_el.child(box_button(
+            tools = tools.child(box_button(
                 "desk-vyce-direct",
                 "Vyce direct",
                 cx,
@@ -165,10 +82,10 @@ impl TrendsDesk {
             ));
         }
         if status.contains("pick another provider") {
-            box_el = box_el.child(box_button("desk-switch-grok", "Grok", cx, |this, cx| {
+            tools = tools.child(box_button("desk-switch-grok", "Grok", cx, |this, cx| {
                 this.choose_provider("grok", cx);
             }));
-            box_el = box_el.child(box_button("desk-switch-muse", "Muse", cx, |this, cx| {
+            tools = tools.child(box_button("desk-switch-muse", "Muse", cx, |this, cx| {
                 this.choose_provider("muse", cx);
             }));
         }
@@ -177,23 +94,96 @@ impl TrendsDesk {
         } else {
             "Copy"
         };
-        box_el = box_el.child(box_button("desk-reply-copy", copy_label, cx, |this, cx| {
-            if let Some(pop) = this.popout.clone() {
-                this.copy_text(&pop.draft, cx);
+        tools = tools.child(box_button("desk-reply-copy", copy_label, cx, |this, cx| {
+            let text = this
+                .reply_edit
+                .as_ref()
+                .map(|editor| editor.text.clone())
+                .or_else(|| this.popout.as_ref().map(|pop| pop.draft.clone()))
+                .unwrap_or_default();
+            if !termy_x::trends_desk::reply_needs_a_take(&text) {
+                this.copy_text(&text, cx);
                 this.action_note = termy_x::trends_desk::copied_mark().into();
             }
             cx.notify();
         }));
+
+        let editor = div()
+            .id("desk-reply-editor")
+            .w_full()
+            .min_w(px(0.0))
+            .min_h(px(96.0))
+            .px(px(10.0))
+            .py(px(8.0))
+            .rounded(px(8.0))
+            .bg(rgb(0x2a1020))
+            .overflow_hidden()
+            .cursor_text()
+            .child(self.reply_text_canvas(&shown, &caret, dim, cx))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    this.agent_input = false;
+                    this.focus_root_after_click(window, cx);
+                    this.place_reply_cursor(
+                        event.position.x.into(),
+                        event.position.y.into(),
+                        event.modifiers.shift,
+                        event.click_count,
+                    );
+                    this.reply_drag = event.click_count <= 1 && !event.modifiers.shift;
+                    cx.stop_propagation();
+                    cx.notify();
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
+                if this.reply_drag && event.pressed_button == Some(MouseButton::Left) {
+                    this.drag_reply_cursor(event.position.x.into(), event.position.y.into());
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _event: &MouseUpEvent, _, cx| {
+                    if this.reply_drag {
+                        this.reply_drag = false;
+                        cx.notify();
+                    }
+                }),
+            );
+
+        // Bottom row inside the pink box: count and note left, Post right.
+        let count = termy_x::trends_desk::char_count(&shown);
+        let over = count > 280;
+        let mut left = div()
+            .flex_1()
+            .min_w(px(0.0))
+            .flex()
+            .flex_col()
+            .gap(px(2.0))
+            .text_size(px(12.0))
+            .whitespace_normal();
+        if !dim {
+            left = left.child(
+                div()
+                    .text_color(if over { rgb(0x7a0010) } else { rgb(0x3a0a24) })
+                    .child(format!("{count}/280")),
+            );
+        } else {
+            left = left.child(div().text_color(rgb(0x3a0a24)).child("Drafting…"));
+        }
+        if let Some(note) = post.note.clone().filter(|_| posted_url.is_none()) {
+            left = left.child(div().text_color(rgb(0x7a0010)).child(note));
+        }
         if let Some(url) = posted_url.clone() {
-            let shown = url.clone();
-            box_el = box_el.child(
+            let shown_url = url.clone();
+            left = left.child(
                 div()
                     .id("desk-posted-link")
-                    .text_size(px(13.0))
-                    .whitespace_normal()
                     .text_color(rgb(0x070b14))
                     .cursor_pointer()
-                    .child(format!("Posted ✓ {shown}"))
+                    .child(format!("Posted ✓ {shown_url}"))
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, _, _, cx| {
@@ -203,51 +193,40 @@ impl TrendsDesk {
                                 url: url.clone(),
                             });
                             this.list_pick = Some("reader".into());
-                            this.action_note = format!("Posted ✓ {shown}");
+                            this.action_note = format!("Posted ✓ {shown_url}");
                             cx.stop_propagation();
                             cx.notify();
                         }),
                     ),
             );
         }
-        let _ = post_label;
-        Some(box_el.into_any_element())
-    }
+        let mut bottom = div()
+            .w_full()
+            .flex()
+            .items_end()
+            .justify_between()
+            .gap(px(10.0))
+            .child(left);
+        if post.visible {
+            bottom = bottom.child(pink_post(post.label, post.enabled, handle, cx));
+        }
 
-    pub(crate) fn pinned_post_button(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
-        let Some(pop) = self.popout.clone().filter(|pop| pop.open) else {
-            return div().into_any_element();
-        };
-        let handle = self
-            .columns
-            .iter()
-            .flat_map(|column| column.view.posts.iter())
-            .find(|post| post.id == pop.card_id)
-            .map(|post| post.author.clone())
-            .unwrap_or_else(|| "author".into());
-        let phase = self.card_replies.get(&pop.card_id).cloned().unwrap_or(
-            termy_x::trends_desk::ReplyPhase::Editing {
-                text: pop.draft.clone(),
-            },
-        );
-        let face = match &phase {
-            termy_x::trends_desk::ReplyPhase::Pending { .. } => {
-                termy_x::trends_desk::PostFace::Posting
-            }
-            termy_x::trends_desk::ReplyPhase::Confirmed { .. } => {
-                termy_x::trends_desk::PostFace::Posted
-            }
-            termy_x::trends_desk::ReplyPhase::Failed { .. } => {
-                termy_x::trends_desk::PostFace::Retry
-            }
-            _ => termy_x::trends_desk::PostFace::Ready,
-        };
-        let label = termy_x::trends_desk::post_button_text(face, &handle);
-        post_button("desk-post-reply", &label, cx, |this, cx| {
-            this.action_note = "Posting…".into();
-            this.send_from_popout(cx);
-            cx.notify();
-        })
+        let box_el = div()
+            .id("desk-inline-editor")
+            .w_full()
+            .min_w(px(0.0))
+            .p(px(10.0))
+            .rounded(px(12.0))
+            .bg(rgb(termy_x::trends_desk::SELECT_PINK))
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .child(tools)
+            .children((!self.take_banner.is_empty()).then(|| self.failure_banner(cx)))
+            .children(generating.then(|| self.cancel_row(cx)))
+            .child(editor)
+            .child(bottom);
+        Some(box_el.into_any_element())
     }
 
     pub(crate) fn load_provider_models(&mut self, cx: &mut Context<Self>) {
@@ -351,33 +330,48 @@ impl TrendsDesk {
         column.into_any_element()
     }
 
-    fn place_reply_cursor(&mut self, x: f32, y: f32, extend: bool) {
-        let mut editor = match self.reply_edit.clone() {
-            Some(e) if !termy_x::trends_desk::reply_needs_a_take(&e.text) => e,
-            _ => {
-                let text = if !self.stream_take.is_empty() {
-                    self.stream_take.clone()
-                } else if self
-                    .popout
-                    .as_ref()
-                    .is_some_and(|p| !termy_x::trends_desk::reply_needs_a_take(&p.draft))
-                {
-                    self.popout
-                        .as_ref()
-                        .map(|p| p.draft.clone())
-                        .unwrap_or_default()
-                } else {
-                    String::new()
-                };
-                termy_x::draft_edit::ReplyEditor::new(&text)
-            }
-        };
-        let (origin_x, origin_y, width) = editor_box();
-        if extend {
-            editor.shift_click(x, y, origin_x, origin_y, width);
-        } else {
-            editor.click_at(x, y, origin_x, origin_y, width);
+    /// The editor the pink box edits, or `None` while a take is still
+    /// drafting and nothing has been typed (clicks then only focus).
+    fn live_reply_editor(&self) -> Option<termy_x::draft_edit::ReplyEditor> {
+        if let Some(editor) = self
+            .reply_edit
+            .clone()
+            .filter(|e| !termy_x::trends_desk::reply_needs_a_take(&e.text))
+        {
+            return Some(editor);
         }
+        if self.take_generating {
+            return None;
+        }
+        let text = self
+            .popout
+            .as_ref()
+            .map(|p| p.draft.clone())
+            .filter(|draft| !termy_x::trends_desk::reply_needs_a_take(draft))
+            .unwrap_or_default();
+        Some(termy_x::draft_edit::ReplyEditor::new(&text))
+    }
+
+    fn place_reply_cursor(&mut self, x: f32, y: f32, extend: bool, clicks: usize) {
+        let Some(mut editor) = self.live_reply_editor() else {
+            return;
+        };
+        let index = self.reply_layout.hit(&editor.text, x, y);
+        let lines = self.reply_layout.lines_for(&editor.text);
+        editor.click_index(&lines, index, clicks.max(1), extend);
+        self.store_reply_caret(editor);
+    }
+
+    fn drag_reply_cursor(&mut self, x: f32, y: f32) {
+        let Some(mut editor) = self.live_reply_editor() else {
+            return;
+        };
+        let index = self.reply_layout.hit(&editor.text, x, y);
+        editor.drag_index(index);
+        self.store_reply_caret(editor);
+    }
+
+    fn store_reply_caret(&mut self, editor: termy_x::draft_edit::ReplyEditor) {
         if let Some(pop) = self.popout.as_mut() {
             pop.draft = editor.text.clone();
         }
@@ -422,7 +416,6 @@ impl TrendsDesk {
         event: &gpui_kit::KeyDownEvent,
         cx: &mut Context<Self>,
     ) {
-        use termy_x::draft_edit::Motion;
         let mods = &event.keystroke.modifiers;
         let command = mods.control || mods.platform;
         if self
@@ -460,22 +453,21 @@ impl TrendsDesk {
             }
         } else if command && key == "z" {
             editor.undo();
+        } else if key == "backspace" && command {
+            editor.delete_word_backward();
         } else if key == "backspace" {
             editor.backspace();
         } else if key == "delete" {
             editor.delete();
-        } else if key == "left" {
-            editor.move_key(Motion::Left, mods.shift);
-        } else if key == "right" {
-            editor.move_key(Motion::Right, mods.shift);
-        } else if key == "up" {
-            editor.move_key(Motion::Up, mods.shift);
-        } else if key == "down" {
-            editor.move_key(Motion::Down, mods.shift);
-        } else if key == "home" {
-            editor.move_key(Motion::Home, mods.shift);
-        } else if key == "end" {
-            editor.move_key(Motion::End, mods.shift);
+        } else if let Some(motion) = reply_motion(key, command) {
+            // Soft-wrapped rows as painted, so Up/Down/Home/End follow
+            // what is on screen.
+            let lines = self.reply_layout.lines_for(&editor.text);
+            editor.move_in(&lines, motion, mods.shift);
+            self.pop_caret = editor.caret;
+            self.reply_edit = Some(editor);
+            cx.notify();
+            return;
         } else if key == "enter" {
             editor.insert("\n");
         } else if let Some(ch) = event.keystroke.key_char.as_deref()
@@ -970,8 +962,20 @@ impl TrendsDesk {
             pop.draft = next.clone();
             pop.variants = termy_x::trends_desk::distinct_variants(&next, &result.variants);
         }
-        self.pop_caret = termy_x::draft_edit::DraftCaret::at_end(next.len());
-        self.reply_edit = Some(termy_x::draft_edit::ReplyEditor::new(&next));
+        let typed = self
+            .reply_edit
+            .as_ref()
+            .filter(|editor| editor.text == next && !termy_x::trends_desk::reply_needs_a_take(&editor.text))
+            .cloned();
+        if let Some(editor) = typed {
+            // The user typed while the take was drafting: keep their text,
+            // caret, selection, and undo exactly as they are.
+            self.pop_caret = editor.caret;
+            self.reply_edit = Some(editor);
+        } else {
+            self.pop_caret = termy_x::draft_edit::DraftCaret::at_end(next.len());
+            self.reply_edit = Some(termy_x::draft_edit::ReplyEditor::new(&next));
+        }
         self.card_replies
             .insert(id.to_string(), edit_reply(&ReplyPhase::Idle, next.clone()));
         self.draft_note = result.note.clone();
@@ -1049,10 +1053,10 @@ impl TrendsDesk {
                     .flex()
                     .flex_wrap()
                     .gap(px(8.0))
-                    .child(post_button("desk-take-retry", "Retry", cx, |this, cx| {
+                    .child(box_button("desk-take-retry", "Retry", cx, |this, cx| {
                         this.request_another_take(cx);
                     }))
-                    .child(post_button(
+                    .child(box_button(
                         "desk-try-hermes",
                         "Try Hermes",
                         cx,
@@ -1060,7 +1064,7 @@ impl TrendsDesk {
                             this.try_provider("hermes", cx);
                         },
                     ))
-                    .child(post_button("desk-try-muse", "Try Muse", cx, |this, cx| {
+                    .child(box_button("desk-try-muse", "Try Muse", cx, |this, cx| {
                         this.try_provider("muse", cx);
                     })),
             )
@@ -1068,7 +1072,7 @@ impl TrendsDesk {
     }
 
     fn cancel_row(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
-        post_button("desk-cancel-take", "Cancel", cx, |this, cx| {
+        box_button("desk-cancel-take", "Stop drafting", cx, |this, cx| {
             this.cancel_take(cx);
         })
     }
@@ -1152,16 +1156,6 @@ impl TrendsDesk {
                         };
                         desk.card_replies
                             .insert(id.clone(), apply_send_result(&pending, result));
-                        if desk
-                            .card_replies
-                            .get(&id)
-                            .is_some_and(|phase| matches!(phase, ReplyPhase::Confirmed { .. }))
-                        {
-                            if desk.popout.as_ref().is_some_and(|pop| pop.card_id == id) {
-                                desk.popout = None;
-                                desk.reply_edit = None;
-                            }
-                        }
                         cx.notify();
                     });
                 })
@@ -1183,47 +1177,6 @@ fn variant_chip(
         this.request_another_take(cx);
         cx.notify();
     })
-}
-
-fn post_button(
-    id: &str,
-    label: &str,
-    cx: &mut Context<TrendsDesk>,
-    handler: impl Fn(&mut TrendsDesk, &mut Context<TrendsDesk>) + 'static,
-) -> gpui_kit::AnyElement {
-    div()
-        .id(SharedString::from(id.to_string()))
-        .w_full()
-        .flex_shrink_0()
-        .min_h(px(56.0))
-        .px(px(16.0))
-        .py(px(12.0))
-        .rounded(px(10.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .bg(rgb(0x7af6ff))
-        .text_size(px(16.0))
-        .text_color(rgb(0x070b14))
-        .cursor_pointer()
-        .hover(|style| style.bg(rgb(0xffe56a)))
-        .active(|style| style.bg(rgb(0xff4fa3)).text_color(rgb(0x070b14)))
-        .child(label.to_string())
-        .tooltip({
-            let tip: SharedString = label.to_string().into();
-            move |_, cx| {
-                cx.new(|_| crate::trends_desk::HintView { text: tip.clone() })
-                    .into()
-            }
-        })
-        .on_mouse_down(
-            MouseButton::Left,
-            cx.listener(move |this, _, _, cx| {
-                handler(this, cx);
-                cx.stop_propagation();
-            }),
-        )
-        .into_any_element()
 }
 
 fn box_button(
@@ -1373,14 +1326,108 @@ fn model_ids(http: &termy_x::io::UreqHttp, base: &str, key: &str) -> Vec<String>
     }
 }
 
-fn remember_editor_box(x: f32, y: f32, width: f32) {
-    EDITOR_BOX.with(|cell| cell.set((x, y, width)));
+/// Pink-box keys that only move the caret. Ctrl/Cmd jumps by word or to the
+/// start/end of the whole reply.
+fn reply_motion(key: &str, command: bool) -> Option<termy_x::draft_edit::Motion> {
+    use termy_x::draft_edit::Motion;
+    Some(match (key, command) {
+        ("left", false) => Motion::Left,
+        ("right", false) => Motion::Right,
+        ("left", true) => Motion::WordLeft,
+        ("right", true) => Motion::WordRight,
+        ("up", _) => Motion::Up,
+        ("down", _) => Motion::Down,
+        ("home", false) => Motion::Home,
+        ("end", false) => Motion::End,
+        ("home", true) => Motion::DocStart,
+        ("end", true) => Motion::DocEnd,
+        _ => return None,
+    })
 }
 
-fn editor_box() -> (f32, f32, f32) {
-    EDITOR_BOX.with(|cell| cell.get())
+/// The bright cyan Post button at the bottom-right of the pink box. It posts
+/// the box's current text as the reply through the existing OpenCLI path,
+/// only on a click, and only when enabled.
+fn pink_post(
+    label: &'static str,
+    enabled: bool,
+    handle: &str,
+    cx: &mut Context<TrendsDesk>,
+) -> gpui_kit::AnyElement {
+    let handle = handle.trim().trim_start_matches('@');
+    let handle = if handle.is_empty() { "author" } else { handle };
+    let tip: SharedString = format!("Post this text as a reply to @{handle}").into();
+    let mut button = div()
+        .id("desk-pink-post")
+        .flex_shrink_0()
+        .min_w(px(112.0))
+        .h(px(40.0))
+        .px(px(20.0))
+        .rounded(px(10.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px(15.0))
+        .font_weight(gpui_kit::FontWeight::BOLD)
+        .child(label)
+        .tooltip(move |_, cx| {
+            cx.new(|_| crate::trends_desk::HintView { text: tip.clone() })
+                .into()
+        });
+    if enabled {
+        button = button
+            .bg(rgb(0x00f0ff))
+            .text_color(rgb(0x070b14))
+            .border_2()
+            .border_color(rgb(0xb8fbff))
+            .cursor_pointer()
+            .hover(|style| style.bg(rgb(0x7af6ff)))
+            .active(|style| style.bg(rgb(0x00b8d4)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.post_from_pink_box(cx);
+                }),
+            );
+    } else {
+        button = button
+            .bg(rgb(0x5fb7c2))
+            .text_color(rgb(0x1d3a40))
+            .border_2()
+            .border_color(rgb(0x5fb7c2))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
+    }
+    button.into_any_element()
 }
 
-thread_local! {
-    static EDITOR_BOX: std::cell::Cell<(f32, f32, f32)> = const { std::cell::Cell::new((0.0, 0.0, 360.0)) };
+impl TrendsDesk {
+    /// Post exactly what is in the pink box now (the edited text), as the
+    /// reply to this card's tweet.
+    pub(crate) fn post_from_pink_box(&mut self, cx: &mut Context<Self>) {
+        let Some(text) = self
+            .reply_edit
+            .as_ref()
+            .map(|editor| editor.text.clone())
+            .or_else(|| self.popout.as_ref().map(|pop| pop.draft.clone()))
+        else {
+            return;
+        };
+        let Some(pop) = self.popout.as_mut() else {
+            return;
+        };
+        let phase = self
+            .card_replies
+            .get(&pop.card_id)
+            .cloned()
+            .unwrap_or(ReplyPhase::Editing { text: text.clone() });
+        if !termy_x::trends_desk::pink_post_button(&text, &phase).enabled {
+            return;
+        }
+        pop.draft = text;
+        self.action_note = "Posting…".into();
+        self.send_from_popout(cx);
+        cx.notify();
+    }
 }
+

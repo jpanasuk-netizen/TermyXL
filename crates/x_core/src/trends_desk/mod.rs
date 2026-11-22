@@ -41,7 +41,7 @@ pub use cards::{
     draft_click_queues_a_file, draft_take, edit_reply, editor_on_draft_click, editor_send,
     expand_locked, expand_right, expand_to_full, fill_reply_if_waiting, frame_from_parts,
     layout_takes, move_selection, offline_take, open_editor, open_width, page_index, page_label,
-    pink_box_controls, remember_width, reply_needs_a_take, request_send, scroll_by, scroll_of,
+    pink_box_controls, pink_post_button, PinkPost, remember_width, reply_needs_a_take, request_send, scroll_by, scroll_of,
     select_take, selection_after_card, selection_after_empty, selection_colors, send_is_busy,
     short_take_note, subject_pages, take_column_count, takes_for_posts, text_after_take,
     text_to_post, toggle_dock, tone_variants, turn_page, wrap_token,

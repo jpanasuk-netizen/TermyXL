@@ -918,7 +918,7 @@ impl TrendsDesk {
         cx.notify();
     }
 
-    fn persist_topics(&mut self) {
+    pub(crate) fn persist_topics(&mut self) {
         let topics: Vec<Topic> = self
             .columns
             .iter()
